@@ -6,13 +6,15 @@
 
     <application
         android:allowBackup="true"
-        android:label="RoosterPlanner"
+        android:label="WerkRooster"
         android:supportsRtl="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/Theme.RoosterPlanner">
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.RoosterPlanner">
+            android:theme="@style/Theme.App.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

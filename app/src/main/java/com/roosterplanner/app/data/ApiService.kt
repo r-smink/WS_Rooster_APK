@@ -2,9 +2,8 @@ package com.roosterplanner.app.data
 
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
-import okhttp3.Credentials
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
@@ -13,8 +12,18 @@ import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
+import java.util.concurrent.TimeUnit
 
 interface ApiService {
+    @POST("wp-json/roosterplanner/v1/auth/login")
+    suspend fun login(@Body body: LoginRequest): LoginResponse
+
+    @POST("wp-json/roosterplanner/v1/auth/refresh")
+    suspend fun refresh(@Body body: RefreshRequest): LoginResponse
+
+    @POST("wp-json/roosterplanner/v1/auth/logout")
+    suspend fun logout(@Body body: LogoutRequest)
+
     @GET("wp-json/roosterplanner/v1/me")
     suspend fun me(): MeResponse
 
@@ -50,22 +59,54 @@ interface ApiService {
 
     @GET("wp-json/roosterplanner/v1/shifts")
     suspend fun shifts(@Query("location_id") locationId: Long): List<Shift>
+
+    @GET("wp-json/roosterplanner/v1/chat")
+    suspend fun getChatHistory(
+        @Query("last_id") lastId: Long? = null,
+        @Query("limit") limit: Int = 50
+    ): List<ChatMessage>
+
+    @POST("wp-json/roosterplanner/v1/chat")
+    suspend fun sendChatMessage(@Body body: SendMessageRequest): ChatMessage
 }
 
 object ApiClient {
-    fun build(config: AuthConfig, enableLogging: Boolean = false): ApiService {
-        val authHeader = Credentials.basic(config.username, config.appPassword)
-        
-        val client = OkHttpClient.Builder().apply {
-            addInterceptor { chain ->
-                val request = chain.request().newBuilder()
-                    .header("Authorization", authHeader)
-                    .build()
-                chain.proceed(request)
+    private var authToken: String? = null
+
+    fun setToken(token: String?) {
+        authToken = token
+    }
+
+    private fun createBaseBuilder(): OkHttpClient.Builder {
+        return OkHttpClient.Builder()
+            .protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .addInterceptor { chain ->
+                val requestBuilder = chain.request().newBuilder()
+                authToken?.let {
+                    requestBuilder.header("Authorization", "Bearer $it")
+                }
+                requestBuilder.header("User-Agent", "WerkRooster-App/1.0")
+                chain.proceed(requestBuilder.build())
+            }
+    }
+
+    fun build(baseUrl: String, enableLogging: Boolean = false, onTokenExpired: (() -> Unit)? = null): ApiService {
+        val client = createBaseBuilder().apply {
+            readTimeout(30, TimeUnit.SECONDS)
+            if (onTokenExpired != null) {
+                addInterceptor { chain ->
+                    val response = chain.proceed(chain.request())
+                    if (response.code == 401) {
+                        onTokenExpired()
+                    }
+                    response
+                }
             }
             if (enableLogging) {
                 addInterceptor(HttpLoggingInterceptor().apply {
-                    level = HttpLoggingInterceptor.Level.BODY
+                    level = HttpLoggingInterceptor.Level.HEADERS
                 })
             }
         }.build()
@@ -73,13 +114,30 @@ object ApiClient {
         val moshi = Moshi.Builder()
             .add(KotlinJsonAdapterFactory())
             .build()
-        val retrofit = Retrofit.Builder()
-            .baseUrl(config.baseUrl.ensureTrailingSlash())
+        
+        return Retrofit.Builder()
+            .baseUrl(baseUrl.ensureTrailingSlash())
             .client(client)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
+            .create(ApiService::class.java)
+    }
 
-        return retrofit.create(ApiService::class.java)
+    fun getChatClient(): OkHttpClient {
+        return createBaseBuilder()
+            .readTimeout(0, TimeUnit.SECONDS) // Belangrijk voor SSE
+            .addInterceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .header("Connection", "keep-alive")
+                    .header("Cache-Control", "no-cache")
+                    .header("Accept", "text/event-stream")
+                    .build()
+                chain.proceed(request)
+            }
+            .addInterceptor(HttpLoggingInterceptor().apply {
+                level = HttpLoggingInterceptor.Level.BASIC
+            })
+            .build()
     }
 }
 

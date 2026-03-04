@@ -3,7 +3,24 @@ package com.roosterplanner.app.data
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class RoosterPlannerRepository(private val api: ApiService) {
+class RoosterPlannerRepository(private var api: ApiService) {
+    
+    fun updateApi(newApi: ApiService) {
+        this.api = newApi
+    }
+
+    suspend fun login(request: LoginRequest): Result<LoginResponse> = runApi {
+        api.login(request)
+    }
+
+    suspend fun refreshTokens(request: RefreshRequest): Result<LoginResponse> = runApi {
+        api.refresh(request)
+    }
+
+    suspend fun logout(request: LogoutRequest): Result<Unit> = runApi {
+        api.logout(request)
+    }
+
     suspend fun fetchMe(): Result<MeResponse> = runApi { api.me() }
 
     suspend fun fetchSchedules(startDate: String, endDate: String): Result<List<ScheduleItem>> =
@@ -37,6 +54,14 @@ class RoosterPlannerRepository(private val api: ApiService) {
 
     suspend fun fetchShifts(locationId: Long): Result<List<Shift>> = runApi {
         api.shifts(locationId)
+    }
+
+    suspend fun fetchChatHistory(lastId: Long? = null, limit: Int = 50): Result<List<ChatMessage>> = runApi {
+        api.getChatHistory(lastId, limit)
+    }
+
+    suspend fun sendChatMessage(message: String, locationId: Long? = null, isAnnouncement: Boolean = false): Result<ChatMessage> = runApi {
+        api.sendChatMessage(SendMessageRequest(message, locationId, if (isAnnouncement) 1 else 0))
     }
 
     private suspend fun <T> runApi(block: suspend () -> T): Result<T> {

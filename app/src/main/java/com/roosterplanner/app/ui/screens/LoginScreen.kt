@@ -9,25 +9,26 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.roosterplanner.app.data.AuthConfig
+import com.roosterplanner.app.ui.theme.RoosterPlannerTheme
 
 @Composable
 fun LoginScreen(
-    initialConfig: AuthConfig?,
+    initialUrl: String?,
     loading: Boolean,
     error: String?,
-    onConnect: (AuthConfig) -> Unit
+    onLogin: (String, String, String) -> Unit
 ) {
-    val (url, setUrl) = remember { mutableStateOf(initialConfig?.baseUrl ?: "https://") }
-    val (user, setUser) = remember { mutableStateOf(initialConfig?.username ?: "") }
-    val (pass, setPass) = remember { mutableStateOf(initialConfig?.appPassword ?: "") }
+    val (url, setUrl) = remember { mutableStateOf(initialUrl ?: "https://") }
+    val (user, setUser) = remember { mutableStateOf("") }
+    val (pass, setPass) = remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -35,7 +36,8 @@ fun LoginScreen(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(text = "Verbind met RoosterPlanner", modifier = Modifier.padding(bottom = 8.dp))
+        Text(text = "Verbind met WerkRooster", style = androidx.compose.material3.MaterialTheme.typography.headlineSmall)
+        Text(text = "Voer je WordPress site URL en inloggegevens in.", modifier = Modifier.padding(bottom = 8.dp))
 
         OutlinedTextField(
             value = url,
@@ -56,7 +58,7 @@ fun LoginScreen(
         OutlinedTextField(
             value = pass,
             onValueChange = setPass,
-            label = { Text("Application Password") },
+            label = { Text("Wachtwoord") },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth()
@@ -69,16 +71,24 @@ fun LoginScreen(
         Button(
             modifier = Modifier.fillMaxWidth(),
             onClick = {
-                val cfg = AuthConfig(url.trim(), user.trim(), pass.trim())
-                onConnect(cfg)
+                onLogin(url.trim(), user.trim(), pass.trim())
             },
             enabled = !loading
         ) {
-            Text(if (loading) "Verbinden..." else "Verbind")
+            Text(if (loading) "Inloggen..." else "Inloggen")
         }
+    }
+}
 
-        TextButton(onClick = { setPass("") }) {
-            Text("Wachtwoord wissen")
-        }
+@Preview(showBackground = true)
+@Composable
+fun LoginScreenPreview() {
+    RoosterPlannerTheme {
+        LoginScreen(
+            initialUrl = null,
+            loading = false,
+            error = null,
+            onLogin = { _, _, _ -> }
+        )
     }
 }

@@ -3,13 +3,38 @@ package com.roosterplanner.app.data
 data class AuthConfig(
     val baseUrl: String,
     val username: String,
-    val appPassword: String
+    val accessToken: String? = null,
+    val refreshToken: String? = null
+)
+
+data class LoginRequest(
+    val username: String,
+    val password: String,
+    val device_id: String? = null
+)
+
+data class LoginResponse(
+    val access_token: String,
+    val access_expires_in: Long,
+    val refresh_token: String,
+    val refresh_expires_in: Long,
+    val user_id: Long
+)
+
+data class RefreshRequest(
+    val refresh_token: String,
+    val device_id: String? = null
+)
+
+data class LogoutRequest(
+    val refresh_token: String
 )
 
 data class MeResponse(
     val user: User,
     val employee: Employee,
-    val locations: List<Location>
+    val locations: List<Location>,
+    val ical_url: String? = null
 )
 
 data class User(val id: Long, val display_name: String, val email: String)
@@ -77,6 +102,22 @@ data class Shift(
     val color: String?
 )
 
+data class ChatMessage(
+    val id: Long,
+    val sender_id: Long,
+    val sender_name: String,
+    val message: String,
+    val is_announcement: Int,
+    val location_id: Long?,
+    val created_at: String
+)
+
+data class SendMessageRequest(
+    val message: String,
+    val location_id: Long? = null,
+    val is_announcement: Int = 0
+)
+
 // Request models
 
 data class AvailabilityEntryRequest(
@@ -91,4 +132,13 @@ data class AvailabilityEntryRequest(
 data class AvailabilityUpsertRequest(
     val location_id: Long,
     val entries: List<AvailabilityEntryRequest>
+)
+
+data class PushTokenRequest(
+    val token: String,
+    val platform: String = "android"
+)
+
+data class SickReportRequest(
+    val reason: String? = null
 )

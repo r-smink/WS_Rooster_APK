@@ -4,7 +4,6 @@ import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.roosterplanner.app.data.ApiClient
-import com.roosterplanner.app.data.AuthConfig
 import com.roosterplanner.app.data.RoosterPlannerRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,7 +19,7 @@ class RoosterFirebaseService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
-        val title = message.notification?.title ?: message.data["title"] ?: "Rooster Planner"
+        val title = message.notification?.title ?: message.data["title"] ?: "WerkRooster"
         val body = message.notification?.body ?: message.data["message"] ?: ""
         val url = message.data["url"] ?: ""
         LocalNotifier.show(this, title, body, url)
@@ -33,7 +32,8 @@ class RoosterFirebaseService : FirebaseMessagingService() {
             val cfg = store.config.firstOrNull()
             if (cfg != null) {
                 try {
-                    val api = ApiClient.build(cfg)
+                    ApiClient.setToken(cfg.accessToken)
+                    val api = ApiClient.build(cfg.baseUrl)
                     val repo = RoosterPlannerRepository(api)
                     repo.registerMobileToken(token, platform = "android")
                 } catch (e: Exception) {

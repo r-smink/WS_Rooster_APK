@@ -4,13 +4,12 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -19,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import com.roosterplanner.app.data.MeResponse
 
 @Composable
@@ -56,7 +56,7 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(text = "Gebruikersgegevens", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
-                Divider()
+                HorizontalDivider()
                 ProfileInfoRow(label = "Naam", value = me.user.display_name)
                 ProfileInfoRow(label = "E-mail", value = me.user.email)
                 ProfileInfoRow(label = "Locaties", value = me.locations.joinToString { it.name })
@@ -89,12 +89,12 @@ fun ProfileScreen(
                     ) {
                         Button(
                             onClick = {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(me.ical_url))
+                                val intent = Intent(Intent.ACTION_VIEW, me.ical_url.toUri())
                                 context.startActivity(intent)
                             },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Icon(Icons.Default.OpenInNew, contentDescription = null)
+                            Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Openen")
                         }
