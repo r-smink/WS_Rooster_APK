@@ -1,9 +1,16 @@
 package com.roosterplanner.app
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,7 +22,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import com.roosterplanner.app.data.*
@@ -27,6 +36,7 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -42,15 +52,22 @@ import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 class MainActivity : ComponentActivity() {
     private val configStore by lazy { ConfigStore(this) }
     private var keepSplashScreen = true
+    
+    // State to handle navigation from notifications
+    private var pendingTargetUrl by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         splashScreen.setKeepOnScreenCondition { keepSplashScreen }
         
         super.onCreate(savedInstanceState)
+        
+        // Check for target_url in starting intent
+        handleIntent(intent)
 
         setContent {
             RoosterPlannerTheme {
+                val context = LocalContext.current
                 val snackbarHostState = remember { SnackbarHostState() }
                 var config by remember { mutableStateOf<AuthConfig?>(null) }
                 var repo by remember { mutableStateOf<RoosterPlannerRepository?>(null) }
@@ -71,6 +88,28 @@ class MainActivity : ComponentActivity() {
 
                 val deviceId = remember { 
                     Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+                }
+
+                // Handle deep linking / notification clicks
+                LaunchedEffect(pendingTargetUrl) {
+                    pendingTargetUrl?.let { url ->
+                        when {
+                            url.contains("/chat") -> currentTab = NavDest.CHAT
+                            url.contains("/notifications") -> currentTab = NavDest.NOTIFICATIONS
+                            url.contains("/schedule") -> currentTab = NavDest.SCHEDULE
+                            url.contains("/availability") -> currentTab = NavDest.AVAILABILITY
+                        }
+                        pendingTargetUrl = null
+                    }
+                }
+
+                // Permission launcher for notifications (Android 13+)
+                val permissionLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.RequestPermission()
+                ) { isGranted ->
+                    if (isGranted) {
+                        Log.d("MainActivity", "Notification permission granted")
+                    }
                 }
 
                 // Restore saved config and setup API
@@ -98,6 +137,13 @@ class MainActivity : ComponentActivity() {
                                 repo?.fetchMe()?.onSuccess { 
                                     me = it
                                     loadInitialData(repo!!, { schedules = it }, { shifts = it }, { loading = it })
+                                    
+                                    // Check permission after successful data load (if user is logged in)
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                        }
+                                    }
                                 }?.onFailure {
                                     error = "Sessie verlopen, log opnieuw in."
                                 }
@@ -185,6 +231,22 @@ class MainActivity : ComponentActivity() {
                                     val newConfig = AuthConfig(url, username, response.access_token, response.refresh_token)
                                     configStore.save(newConfig)
                                     ApiClient.setToken(response.access_token)
+                                    
+                                    // Register FCM Token
+                                    FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                                        if (task.isSuccessful) {
+                                            val token = task.result
+                                            scope.launch {
+                                                tempRepo.registerMobileToken(token, "android")
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Ask for notification permission after login on Android 13+
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    }
+
                                 }.onFailure {
                                     error = "Inloggen mislukt: ${it.message}"
                                 }
@@ -393,6 +455,17 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        intent?.getStringExtra("target_url")?.let { url ->
+            pendingTargetUrl = url
         }
     }
 

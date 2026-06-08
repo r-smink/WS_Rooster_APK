@@ -1,7 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    // id("com.google.gms.google-services")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -71,9 +71,10 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.6.2")
     implementation("com.google.android.material:material:1.13.0")
 
-    // Firebase FCM
-    implementation(platform("com.google.firebase:firebase-bom:32.7.4"))
+    // Firebase BoM & Messaging
+    implementation(platform("com.google.firebase:firebase-bom:34.14.0"))
     implementation("com.google.firebase:firebase-messaging")
+    implementation("com.google.firebase:firebase-analytics")
 
     // Networking
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
