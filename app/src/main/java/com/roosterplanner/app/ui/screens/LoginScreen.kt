@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -16,17 +15,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.roosterplanner.app.data.AuthConfig
 import com.roosterplanner.app.ui.theme.RoosterPlannerTheme
 
 @Composable
 fun LoginScreen(
-    initialUrl: String?,
     loading: Boolean,
     error: String?,
     onLogin: (String, String, String) -> Unit
 ) {
-    val (url, setUrl) = remember { mutableStateOf(initialUrl ?: "https://") }
+    val url = "https://servawerkroosters.nl"
     val (user, setUser) = remember { mutableStateOf("") }
     val (pass, setPass) = remember { mutableStateOf("") }
 
@@ -37,15 +34,7 @@ fun LoginScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(text = "Verbind met WerkRooster", style = androidx.compose.material3.MaterialTheme.typography.headlineSmall)
-        Text(text = "Voer je WordPress site URL en inloggegevens in.", modifier = Modifier.padding(bottom = 8.dp))
-
-        OutlinedTextField(
-            value = url,
-            onValueChange = setUrl,
-            label = { Text("WordPress site URL") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
+        Text(text = "Voer je inloggegevens in om aan de slag te gaan.", modifier = Modifier.padding(bottom = 8.dp))
 
         OutlinedTextField(
             value = user,
@@ -71,7 +60,7 @@ fun LoginScreen(
         Button(
             modifier = Modifier.fillMaxWidth(),
             onClick = {
-                onLogin(url.trim(), user.trim(), pass.trim())
+                onLogin(url, user.trim(), pass.trim())
             },
             enabled = !loading
         ) {
@@ -85,7 +74,6 @@ fun LoginScreen(
 fun LoginScreenPreview() {
     RoosterPlannerTheme {
         LoginScreen(
-            initialUrl = null,
             loading = false,
             error = null,
             onLogin = { _, _, _ -> }

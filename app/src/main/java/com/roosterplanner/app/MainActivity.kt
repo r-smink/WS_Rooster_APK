@@ -44,9 +44,6 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
-import okhttp3.*
-import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity() {
@@ -82,7 +79,16 @@ class MainActivity : ComponentActivity() {
                 var notifications by remember { mutableStateOf<List<NotificationItem>>(emptyList()) }
                 var chatMessages by remember { mutableStateOf<List<ChatMessage>>(emptyList()) }
                 var currentTab by remember { mutableStateOf(NavDest.DASHBOARD) }
-                var teamPhone by remember { mutableStateOf<String?>("+31638993687") }
+                var teamPhoneContacts by remember { mutableStateOf<List<TeamPhoneContact>>(emptyList()) }
+                var chatError by remember { mutableStateOf<String?>(null) }
+                var swapMyShifts by remember { mutableStateOf<List<SwapShift>>(emptyList()) }
+                var swapAvailable by remember { mutableStateOf<List<SwapShift>>(emptyList()) }
+                var swapIncoming by remember { mutableStateOf<List<SwapRequestItem>>(emptyList()) }
+                var swapMine by remember { mutableStateOf<List<SwapRequestItem>>(emptyList()) }
+                var swapColleagues by remember { mutableStateOf<List<Colleague>>(emptyList()) }
+                var swapStatus by remember { mutableStateOf<String?>(null) }
+                var timeoffItems by remember { mutableStateOf<List<TimeoffItem>>(emptyList()) }
+                var timeoffStatus by remember { mutableStateOf<String?>(null) }
                 val scope = rememberCoroutineScope()
                 val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
@@ -98,6 +104,8 @@ class MainActivity : ComponentActivity() {
                             url.contains("/notifications") -> currentTab = NavDest.NOTIFICATIONS
                             url.contains("/schedule") -> currentTab = NavDest.SCHEDULE
                             url.contains("/availability") -> currentTab = NavDest.AVAILABILITY
+                            url.contains("/ruilen") || url.contains("/swap") -> currentTab = NavDest.SWAPS
+                            url.contains("/verlof") || url.contains("/timeoff") -> currentTab = NavDest.TIMEOFF
                         }
                         pendingTargetUrl = null
                     }
@@ -137,7 +145,12 @@ class MainActivity : ComponentActivity() {
                                 repo?.fetchMe()?.onSuccess { 
                                     me = it
                                     loadInitialData(repo!!, { schedules = it }, { shifts = it }, { loading = it })
-                                    
+
+                                    // Fetch team phone numbers from API
+                                    repo?.fetchTeamPhone()?.onSuccess { phoneResponse ->
+                                        teamPhoneContacts = phoneResponse.contacts
+                                    }
+
                                     // Check permission after successful data load (if user is logged in)
                                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -155,60 +168,31 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // SSE Chat Handler
+                // Chat Polling Handler
                 LaunchedEffect(config, currentTab) {
                     if (config != null && currentTab == NavDest.CHAT) {
-                        withContext(Dispatchers.IO) {
-                            // 1. Load history
-                            val historyResult = repo?.fetchChatHistory()
-                            val history = historyResult?.getOrNull() ?: emptyList()
-                            withContext(Dispatchers.Main) {
-                                chatMessages = history
-                            }
-                            
-                            // 2. Start SSE loop
-                            val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
-                            val adapter = moshi.adapter(ChatMessage::class.java)
-                            val client = ApiClient.getChatClient()
-                            val baseUrl = if (config!!.baseUrl.endsWith("/")) config!!.baseUrl else "${config!!.baseUrl}/"
+                        chatError = null
+                        // Initial load
+                        val historyResult = repo?.fetchChatHistory()
+                        if (historyResult?.isSuccess == true) {
+                            chatMessages = historyResult.getOrNull() ?: emptyList()
+                        } else {
+                            chatError = "Kon chatberichten niet laden"
+                        }
 
-                            while (currentTab == NavDest.CHAT) {
-                                val lastId = chatMessages.lastOrNull()?.id ?: 0L
-                                val url = "${baseUrl}wp-json/roosterplanner/v1/chat/stream?last_id=$lastId"
-                                
-                                val request = Request.Builder()
-                                    .url(url)
-                                    .header("Accept", "text/event-stream")
-                                    .build()
-
-                                try {
-                                    client.newCall(request).execute().use { response ->
-                                        if (!response.isSuccessful) {
-                                            delay(5000)
-                                            return@use
-                                        }
-                                        
-                                        response.body?.source()?.let { source ->
-                                            while (!source.exhausted() && currentTab == NavDest.CHAT) {
-                                                val line = source.readUtf8Line() ?: break
-                                                if (line.startsWith("data: ")) {
-                                                    val jsonData = line.removePrefix("data: ")
-                                                    try {
-                                                        adapter.fromJson(jsonData)?.let { msg ->
-                                                            withContext(Dispatchers.Main) {
-                                                                chatMessages = (chatMessages + msg)
-                                                                    .distinctBy { it.id }
-                                                                    .sortedBy { it.id }
-                                                            }
-                                                        }
-                                                    } catch (e: Exception) {}
-                                                }
-                                            }
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    delay(3000)
+                        // Poll loop
+                        while (currentTab == NavDest.CHAT) {
+                            delay(5000)
+                            val lastId = chatMessages.lastOrNull()?.id ?: 0L
+                            val pollResult = repo?.fetchChatHistory(lastId)
+                            if (pollResult?.isSuccess == true) {
+                                val newMessages = pollResult.getOrNull() ?: emptyList()
+                                if (newMessages.isNotEmpty()) {
+                                    chatMessages = (chatMessages + newMessages)
+                                        .distinctBy { it.id }
+                                        .sortedBy { it.id }
                                 }
+                                chatError = null
                             }
                         }
                     }
@@ -216,7 +200,6 @@ class MainActivity : ComponentActivity() {
 
                 if (config == null) {
                     LoginScreen(
-                        initialUrl = null,
                         loading = loading,
                         error = error,
                         onLogin = { url, username, password ->
@@ -324,15 +307,16 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         ) { padding ->
-                            val locationId = me?.locations?.firstOrNull()?.id?.toLong() ?: 0L
+                            val hasLocations = !me?.locations.isNullOrEmpty()
 
                             // Load data when tab changes
-                            LaunchedEffect(currentTab, selectedMonth, locationId) {
-                                if (currentTab == NavDest.AVAILABILITY && locationId != 0L) {
+                            LaunchedEffect(currentTab, selectedMonth, hasLocations) {
+                                if (currentTab == NavDest.AVAILABILITY && hasLocations) {
                                     availabilityStatus = null
                                     availabilityEntries = emptyList()
                                     loading = true
-                                    repo?.fetchAvailability(selectedMonth.toString(), locationId)?.onSuccess { response ->
+                                    // locationId=null → server aggregates across all assigned locations
+                                    repo?.fetchAvailability(selectedMonth.toString(), null)?.onSuccess { response ->
                                         availabilityEntries = response.items.map { item ->
                                             AvailabilityEntryRequest(
                                                 date = item.work_date,
@@ -340,9 +324,22 @@ class MainActivity : ComponentActivity() {
                                                 shift_preference = item.shift_preference,
                                                 custom_start = item.custom_start,
                                                 custom_end = item.custom_end,
-                                                notes = item.notes
+                                                notes = item.notes,
+                                                id = item.id
                                             )
                                         }
+                                        // Use shifts from the aggregated response if available
+                                        val responseShifts = response.shifts?.map { s ->
+                                            Shift(
+                                                id = s.id,
+                                                location_id = s.location_id,
+                                                name = s.name,
+                                                start_time = s.start_time,
+                                                end_time = s.end_time,
+                                                color = s.color
+                                            )
+                                        } ?: emptyList()
+                                        if (responseShifts.isNotEmpty()) shifts = responseShifts
                                     }?.onFailure {
                                         availabilityStatus = "Kon beschikbaarheid niet laden"
                                     }
@@ -350,6 +347,20 @@ class MainActivity : ComponentActivity() {
                                 }
                                 if (currentTab == NavDest.NOTIFICATIONS) {
                                     repo?.fetchNotifications()?.onSuccess { notifications = it }
+                                }
+                                if (currentTab == NavDest.SWAPS) {
+                                    swapStatus = null
+                                    repo?.fetchMyShiftsForSwap()?.onSuccess { swapMyShifts = it.shifts }
+                                    repo?.fetchAvailableShifts()?.onSuccess { swapAvailable = it.shifts }
+                                    repo?.fetchSwapRequests()?.onSuccess {
+                                        swapIncoming = it.incoming
+                                        swapMine = it.mine
+                                    }
+                                    repo?.fetchColleagues()?.onSuccess { swapColleagues = it.colleagues }
+                                }
+                                if (currentTab == NavDest.TIMEOFF) {
+                                    timeoffStatus = null
+                                    repo?.fetchTimeoff()?.onSuccess { timeoffItems = it.items }
                                 }
                             }
 
@@ -398,14 +409,133 @@ class MainActivity : ComponentActivity() {
                                         onSubmit = { entries ->
                                             scope.launch {
                                                 loading = true
-                                                val body = AvailabilityUpsertRequest(location_id = me!!.locations.firstOrNull()?.id ?: 0, entries = entries)
-                                                repo?.upsertAvailability(body)
+                                                availabilityStatus = null
+                                                // location_id=null → server writes to all assigned locations
+                                                val body = AvailabilityUpsertRequest(location_id = null, entries = entries)
+                                                val result = repo?.upsertAvailability(body)
+                                                if (result?.isSuccess == true) {
+                                                    // Refresh availability data from server
+                                                    repo?.fetchAvailability(selectedMonth.toString(), null)?.onSuccess { response ->
+                                                        availabilityEntries = response.items.map { item ->
+                                                            AvailabilityEntryRequest(
+                                                                date = item.work_date,
+                                                                is_available = item.is_available == 1,
+                                                                shift_preference = item.shift_preference,
+                                                                custom_start = item.custom_start,
+                                                                custom_end = item.custom_end,
+                                                                notes = item.notes,
+                                                                id = item.id
+                                                            )
+                                                        }
+                                                        availabilityStatus = "Opgeslagen"
+                                                    }?.onFailure {
+                                                        availabilityStatus = "Opgeslagen, maar kon niet verversen"
+                                                    }
+                                                } else {
+                                                    availabilityStatus = "Opslaan mislukt"
+                                                }
                                                 loading = false
-                                                availabilityStatus = "Opgeslagen"
                                             }
                                         },
                                         loading = loading,
                                         status = availabilityStatus
+                                    )
+                                    NavDest.SWAPS -> SwapScreen(
+                                        myShifts = swapMyShifts,
+                                        availableShifts = swapAvailable,
+                                        incomingRequests = swapIncoming,
+                                        myRequests = swapMine,
+                                        colleagues = swapColleagues,
+                                        loading = loading,
+                                        status = swapStatus,
+                                        onRefresh = {
+                                            scope.launch {
+                                                repo?.fetchMyShiftsForSwap()?.onSuccess { swapMyShifts = it.shifts }
+                                                repo?.fetchAvailableShifts()?.onSuccess { swapAvailable = it.shifts }
+                                                repo?.fetchSwapRequests()?.onSuccess {
+                                                    swapIncoming = it.incoming
+                                                    swapMine = it.mine
+                                                }
+                                                repo?.fetchColleagues()?.onSuccess { swapColleagues = it.colleagues }
+                                            }
+                                        },
+                                        onToggleSwappable = { scheduleId ->
+                                            scope.launch {
+                                                val result = repo?.toggleSwappable(scheduleId)
+                                                if (result?.isSuccess == true) {
+                                                    swapStatus = result.getOrNull()?.message
+                                                    repo?.fetchMyShiftsForSwap()?.onSuccess { swapMyShifts = it.shifts }
+                                                    repo?.fetchAvailableShifts()?.onSuccess { swapAvailable = it.shifts }
+                                                } else {
+                                                    swapStatus = "Kon ruilbaar-status niet wijzigen"
+                                                }
+                                            }
+                                        },
+                                        onRequestSwap = { scheduleId, colleagueId, reason ->
+                                            scope.launch {
+                                                val result = repo?.requestSwap(scheduleId, colleagueId, reason)
+                                                if (result?.isSuccess == true) {
+                                                    swapStatus = "Ruilverzoek ingediend"
+                                                    repo?.fetchSwapRequests()?.onSuccess {
+                                                        swapIncoming = it.incoming
+                                                        swapMine = it.mine
+                                                    }
+                                                } else {
+                                                    swapStatus = "Ruilverzoek indienen mislukt"
+                                                }
+                                            }
+                                        },
+                                        onRespondSwap = { swapId, action ->
+                                            scope.launch {
+                                                val result = repo?.respondSwap(swapId, action)
+                                                if (result?.isSuccess == true) {
+                                                    swapStatus = if (action == "accept") "Verzoek geaccepteerd" else "Verzoek afgewezen"
+                                                    repo?.fetchSwapRequests()?.onSuccess {
+                                                        swapIncoming = it.incoming
+                                                        swapMine = it.mine
+                                                    }
+                                                } else {
+                                                    swapStatus = "Kon niet reageren op verzoek"
+                                                }
+                                            }
+                                        },
+                                        onClaimShift = { scheduleId ->
+                                            scope.launch {
+                                                val result = repo?.claimShift(scheduleId)
+                                                if (result?.isSuccess == true) {
+                                                    swapStatus = "Dienst overgenomen"
+                                                    repo?.fetchAvailableShifts()?.onSuccess { swapAvailable = it.shifts }
+                                                    repo?.fetchMyShiftsForSwap()?.onSuccess { swapMyShifts = it.shifts }
+                                                } else {
+                                                    swapStatus = "Dienst overnemen mislukt"
+                                                }
+                                            }
+                                        },
+                                        onBack = { currentTab = NavDest.DASHBOARD }
+                                    )
+                                    NavDest.TIMEOFF -> TimeoffScreen(
+                                        items = timeoffItems,
+                                        loading = loading,
+                                        status = timeoffStatus,
+                                        onRefresh = {
+                                            scope.launch {
+                                                repo?.fetchTimeoff()?.onSuccess { timeoffItems = it.items }
+                                            }
+                                        },
+                                        onSubmit = { startDate, endDate, type, reason ->
+                                            scope.launch {
+                                                loading = true
+                                                val result = repo?.submitTimeoff(startDate, endDate, type, reason)
+                                                if (result?.isSuccess == true) {
+                                                    timeoffStatus = "Aanvraag verzonden!"
+                                                    repo?.fetchTimeoff()?.onSuccess { timeoffItems = it.items }
+                                                } else {
+                                                    timeoffStatus = "Aanvraag indienen mislukt"
+                                                }
+                                                loading = false
+                                            }
+                                        },
+                                        onBack = { currentTab = NavDest.DASHBOARD }
                                     )
                                     NavDest.PROFILE -> ProfileScreen(
                                         me = me!!,
@@ -421,10 +551,11 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             }
                                         },
-                                        onBack = { currentTab = NavDest.DASHBOARD }
+                                        onBack = { currentTab = NavDest.DASHBOARD },
+                                        error = chatError
                                     )
                                     NavDest.SICK -> SickScreen(
-                                        teamPhone = teamPhone,
+                                        teamPhoneContacts = teamPhoneContacts,
                                         onSubmit = { reason ->
                                             scope.launch {
                                                 loading = true
@@ -498,6 +629,8 @@ private fun iconFor(tab: NavDest) = when (tab) {
     NavDest.DASHBOARD -> Icons.Default.Dashboard
     NavDest.SCHEDULE -> Icons.Default.Schedule
     NavDest.AVAILABILITY -> Icons.Default.EventAvailable
+    NavDest.SWAPS -> Icons.Default.SwapHoriz
+    NavDest.TIMEOFF -> Icons.Default.BeachAccess
     NavDest.PROFILE -> Icons.Default.Person
     NavDest.CHAT -> Icons.AutoMirrored.Filled.Chat
     NavDest.SICK -> Icons.Default.MedicalInformation

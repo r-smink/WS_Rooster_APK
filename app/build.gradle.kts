@@ -7,25 +7,42 @@ plugins {
 
 android {
     namespace = "com.roosterplanner.app"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.roosterplanner.app"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        targetSdk = 36
+        versionCode = 4
+        versionName = "1.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            // Dit verwijst naar de keystore die je zojuist hebt aangemaakt
+            storeFile = file("rooster-release-key.jks")
+            // De wachtwoorden kun je hier invullen of later via de wizard doen
+            storePassword = "REMOVED"
+            keyAlias = "rooster-alias"
+            keyPassword = "REMOVED"
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true // Beveiligt je code en maakt de app kleiner
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Hiermee worden de foutopsporingssymbolen voor native libraries meegeleverd
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
         }
     }
 

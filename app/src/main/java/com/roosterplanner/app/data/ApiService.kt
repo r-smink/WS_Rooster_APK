@@ -45,7 +45,7 @@ interface ApiService {
     @GET("wp-json/roosterplanner/v1/availability")
     suspend fun availability(
         @Query("month") month: String,
-        @Query("location_id") locationId: Long
+        @Query("location_id") locationId: Long?
     ): AvailabilityResponse
 
     @POST("wp-json/roosterplanner/v1/availability")
@@ -68,6 +68,46 @@ interface ApiService {
 
     @POST("wp-json/roosterplanner/v1/chat")
     suspend fun sendChatMessage(@Body body: SendMessageRequest): ChatMessage
+
+    @GET("wp-json/roosterplanner/v1/team-phone")
+    suspend fun teamPhone(): TeamPhoneResponse
+
+    // ---- Shift swaps ----
+
+    @GET("wp-json/roosterplanner/v1/swaps/my-shifts")
+    suspend fun swapsMyShifts(): MyShiftsResponse
+
+    @GET("wp-json/roosterplanner/v1/swaps/available")
+    suspend fun swapsAvailable(): AvailableShiftsResponse
+
+    @GET("wp-json/roosterplanner/v1/swaps/requests")
+    suspend fun swapsRequests(): SwapsRequestsResponse
+
+    @GET("wp-json/roosterplanner/v1/swaps/colleagues")
+    suspend fun swapsColleagues(): ColleaguesResponse
+
+    @POST("wp-json/roosterplanner/v1/swaps/request")
+    suspend fun requestSwap(@Body body: RequestSwapBody)
+
+    @POST("wp-json/roosterplanner/v1/swaps/{id}/respond")
+    suspend fun respondSwap(
+        @Path("id") id: Long,
+        @Body body: RespondSwapBody
+    )
+
+    @POST("wp-json/roosterplanner/v1/swaps/claim")
+    suspend fun claimSwap(@Body body: ClaimSwapBody)
+
+    @POST("wp-json/roosterplanner/v1/schedules/{id}/toggle-swappable")
+    suspend fun toggleSwappable(@Path("id") id: Long): ToggleSwappableResponse
+
+    // ---- Time off (verlof) ----
+
+    @GET("wp-json/roosterplanner/v1/timeoff")
+    suspend fun timeoff(): TimeoffResponse
+
+    @POST("wp-json/roosterplanner/v1/timeoff")
+    suspend fun submitTimeoff(@Body body: TimeoffRequest)
 }
 
 object ApiClient {

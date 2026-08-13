@@ -199,14 +199,15 @@ fun CalendarDayCell(
 ) {
     val backgroundColor = when {
         !entry.is_available -> MaterialTheme.colorScheme.errorContainer
-        entry.shift_preference != null -> MaterialTheme.colorScheme.primaryContainer
-        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        entry.id != null && entry.shift_preference != null -> MaterialTheme.colorScheme.primaryContainer
+        entry.id != null -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)
     }
     
     val contentColor = when {
         !entry.is_available -> MaterialTheme.colorScheme.onErrorContainer
-        entry.shift_preference != null -> MaterialTheme.colorScheme.onPrimaryContainer
-        else -> MaterialTheme.colorScheme.onSurface
+        entry.id != null -> MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
     }
 
     Box(

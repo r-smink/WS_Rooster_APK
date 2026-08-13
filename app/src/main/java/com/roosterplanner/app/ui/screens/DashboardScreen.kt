@@ -24,7 +24,9 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MedicalInformation
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.BeachAccess
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -160,6 +162,8 @@ fun DashboardScreen(
         val menuItems = listOf(
             DashboardMenuItem(NavDest.SCHEDULE, "Rooster", Icons.Default.Schedule),
             DashboardMenuItem(NavDest.AVAILABILITY, "Beschikbaarheid", Icons.Default.EventAvailable),
+            DashboardMenuItem(NavDest.SWAPS, "Ruilen", Icons.Default.SwapHoriz),
+            DashboardMenuItem(NavDest.TIMEOFF, "Verlof", Icons.Default.BeachAccess),
             DashboardMenuItem(NavDest.PROFILE, "Mijn Profiel", Icons.Default.Person),
             DashboardMenuItem(NavDest.CHAT, "Chat", Icons.AutoMirrored.Filled.Chat),
             DashboardMenuItem(NavDest.SICK, "Ziek melden", Icons.Default.MedicalInformation),

@@ -34,7 +34,7 @@ class RoosterPlannerRepository(private var api: ApiService) {
         Unit
     }
 
-    suspend fun fetchAvailability(month: String, locationId: Long): Result<AvailabilityResponse> =
+    suspend fun fetchAvailability(month: String, locationId: Long? = null): Result<AvailabilityResponse> =
         runApi { api.availability(month, locationId) }
 
     suspend fun upsertAvailability(body: AvailabilityUpsertRequest): Result<Unit> = runApi {
@@ -62,6 +62,48 @@ class RoosterPlannerRepository(private var api: ApiService) {
 
     suspend fun sendChatMessage(message: String, locationId: Long? = null, isAnnouncement: Boolean = false): Result<ChatMessage> = runApi {
         api.sendChatMessage(SendMessageRequest(message, locationId, if (isAnnouncement) 1 else 0))
+    }
+
+    suspend fun fetchTeamPhone(): Result<TeamPhoneResponse> = runApi {
+        api.teamPhone()
+    }
+
+    // ---- Shift swaps ----
+
+    suspend fun fetchMyShiftsForSwap(): Result<MyShiftsResponse> = runApi { api.swapsMyShifts() }
+
+    suspend fun fetchAvailableShifts(): Result<AvailableShiftsResponse> = runApi { api.swapsAvailable() }
+
+    suspend fun fetchSwapRequests(): Result<SwapsRequestsResponse> = runApi { api.swapsRequests() }
+
+    suspend fun fetchColleagues(): Result<ColleaguesResponse> = runApi { api.swapsColleagues() }
+
+    suspend fun requestSwap(scheduleId: Long, requestedEmployeeId: Long? = null, reason: String? = null): Result<Unit> = runApi {
+        api.requestSwap(RequestSwapBody(scheduleId, requestedEmployeeId, reason))
+        Unit
+    }
+
+    suspend fun respondSwap(swapId: Long, action: String): Result<Unit> = runApi {
+        api.respondSwap(swapId, RespondSwapBody(action))
+        Unit
+    }
+
+    suspend fun claimShift(scheduleId: Long): Result<Unit> = runApi {
+        api.claimSwap(ClaimSwapBody(scheduleId))
+        Unit
+    }
+
+    suspend fun toggleSwappable(scheduleId: Long): Result<ToggleSwappableResponse> = runApi {
+        api.toggleSwappable(scheduleId)
+    }
+
+    // ---- Time off (verlof) ----
+
+    suspend fun fetchTimeoff(): Result<TimeoffResponse> = runApi { api.timeoff() }
+
+    suspend fun submitTimeoff(startDate: String, endDate: String, type: String, reason: String?): Result<Unit> = runApi {
+        api.submitTimeoff(TimeoffRequest(startDate, endDate, type, reason))
+        Unit
     }
 
     private suspend fun <T> runApi(block: suspend () -> T): Result<T> {

@@ -28,7 +28,8 @@ fun ChatScreen(
     messages: List<ChatMessage>,
     currentUserId: Long,
     onSendMessage: (String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    error: String? = null
 ) {
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -63,11 +64,39 @@ fun ChatScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(vertical = 16.dp)
         ) {
-            items(messages) { message ->
-                ChatBubble(
-                    message = message,
-                    isMe = message.sender_id == currentUserId
-                )
+            if (messages.isEmpty() && error == null) {
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "Berichten laden...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+            } else if (messages.isEmpty() && error != null) {
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            } else {
+                items(messages) { message ->
+                    ChatBubble(
+                        message = message,
+                        isMe = message.sender_id == currentUserId
+                    )
+                }
             }
         }
 
