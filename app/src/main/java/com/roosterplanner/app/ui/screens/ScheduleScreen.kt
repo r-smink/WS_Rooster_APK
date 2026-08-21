@@ -25,24 +25,38 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.roosterplanner.app.data.Location
 import com.roosterplanner.app.data.MeResponse
+import com.roosterplanner.app.data.MonthStatusResponse
 import com.roosterplanner.app.data.ScheduleItem
 import java.time.*
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.*
 
+enum class ScheduleFilter { PERSONAL, FULL }
+
 @Composable
 fun ScheduleScreen(
     me: MeResponse,
     schedules: List<ScheduleItem>,
+    fullSchedules: List<ScheduleItem>,
+    monthStatus: MonthStatusResponse?,
+    scheduleFilter: ScheduleFilter,
+    selectedLocationId: Long?,
+    onFilterChange: (ScheduleFilter) -> Unit,
+    onLocationSelected: (Long?) -> Unit,
     onRefresh: () -> Unit,
-    onDateRangeSelected: (LocalDate, LocalDate) -> Unit,
+    onMonthChange: (YearMonth) -> Unit,
+    currentMonth: YearMonth,
     onBack: () -> Unit
 ) {
     var viewMode by remember { mutableStateOf(ScheduleViewMode.LIST) }
-    var currentMonth by remember { mutableStateOf(YearMonth.now()) }
     val tf = DateTimeFormatter.ofPattern("HH:mm")
+
+    val activeSchedules = if (scheduleFilter == ScheduleFilter.FULL) fullSchedules else schedules
+    val isFull = scheduleFilter == ScheduleFilter.FULL
+    val isFinalized = monthStatus?.is_finalized == true
 
     Column(
         modifier = Modifier
@@ -57,8 +71,8 @@ fun ScheduleScreen(
         ) {
             Text("Mijn Rooster", style = MaterialTheme.typography.titleLarge)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { 
-                    viewMode = if (viewMode == ScheduleViewMode.LIST) ScheduleViewMode.CALENDAR else ScheduleViewMode.LIST 
+                IconButton(onClick = {
+                    viewMode = if (viewMode == ScheduleViewMode.LIST) ScheduleViewMode.CALENDAR else ScheduleViewMode.LIST
                 }) {
                     Icon(
                         if (viewMode == ScheduleViewMode.LIST) Icons.Default.CalendarMonth else Icons.AutoMirrored.Filled.List,
@@ -71,19 +85,127 @@ fun ScheduleScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        if (viewMode == ScheduleViewMode.LIST) {
-            ListView(schedules, onRefresh, tf)
+        // Filter toggle: Mijn rooster / Volledig rooster
+        FilterRow(
+            filter = scheduleFilter,
+            onFilterChange = onFilterChange
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Location filter (only in FULL mode with multiple locations)
+        if (isFull && me.locations.size > 1) {
+            LocationFilterRow(
+                locations = me.locations,
+                selectedLocationId = selectedLocationId,
+                onLocationSelected = onLocationSelected
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        // Not-finalized message in FULL mode
+        if (isFull && !isFinalized) {
+            NotFinalizedCard(currentMonth)
         } else {
-            CalendarView(
-                currentMonth = currentMonth,
-                schedules = schedules,
-                onMonthChange = { newMonth ->
-                    currentMonth = newMonth
-                    val start = newMonth.atDay(1)
-                    val end = newMonth.atEndOfMonth()
-                    onDateRangeSelected(start, end)
-                },
-                tf = tf
+            if (viewMode == ScheduleViewMode.LIST) {
+                ListView(activeSchedules, onRefresh, tf)
+            } else {
+                CalendarView(
+                    currentMonth = currentMonth,
+                    schedules = activeSchedules,
+                    showEmployee = isFull,
+                    onMonthChange = onMonthChange,
+                    tf = tf
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterRow(
+    filter: ScheduleFilter,
+    onFilterChange: (ScheduleFilter) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        FilterChip(
+            selected = filter == ScheduleFilter.PERSONAL,
+            onClick = { onFilterChange(ScheduleFilter.PERSONAL) },
+            label = { Text("Mijn rooster") },
+            modifier = Modifier.weight(1f)
+        )
+        FilterChip(
+            selected = filter == ScheduleFilter.FULL,
+            onClick = { onFilterChange(ScheduleFilter.FULL) },
+            label = { Text("Volledig rooster") },
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun LocationFilterRow(
+    locations: List<Location>,
+    selectedLocationId: Long?,
+    onLocationSelected: (Long?) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selected = locations.firstOrNull { it.id == selectedLocationId } ?: locations.firstOrNull()
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = { expanded = !expanded },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Locatie: ${selected?.name ?: "Kies locatie"}")
+            Spacer(Modifier.weight(1f))
+            Text("▾")
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            locations.forEach { loc ->
+                DropdownMenuItem(
+                    text = { Text(loc.name) },
+                    onClick = {
+                        onLocationSelected(loc.id)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotFinalizedCard(month: YearMonth) {
+    val monthLabel = month.month.getDisplayName(TextStyle.FULL, Locale("nl")) + " " + month.year
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("⏳ Rooster nog niet definitief", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                "Het rooster voor $monthLabel is nog niet definitief gemaakt door de planner.",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                "Je ontvangt automatisch een notificatie zodra je rooster beschikbaar is.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center
             )
         }
     }
@@ -102,7 +224,7 @@ fun ListView(schedules: List<ScheduleItem>, onRefresh: () -> Unit, tf: DateTimeF
         Spacer(modifier = Modifier.height(12.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(schedules) { item ->
-                ScheduleCard(item, tf)
+                ScheduleCard(item, tf, showEmployee = true)
             }
         }
     }
@@ -112,6 +234,7 @@ fun ListView(schedules: List<ScheduleItem>, onRefresh: () -> Unit, tf: DateTimeF
 fun CalendarView(
     currentMonth: YearMonth,
     schedules: List<ScheduleItem>,
+    showEmployee: Boolean,
     onMonthChange: (YearMonth) -> Unit,
     tf: DateTimeFormatter
 ) {
@@ -125,7 +248,7 @@ fun CalendarView(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     selectedDateShifts.forEach { shift ->
-                        ScheduleCard(shift, tf)
+                        ScheduleCard(shift, tf, showEmployee = showEmployee)
                     }
                 }
             },
@@ -190,13 +313,13 @@ fun CalendarView(
                 val day = dayIndex + 1
                 val dateStr = currentMonth.atDay(day).format(DateTimeFormatter.ISO_DATE)
                 val daySchedules = schedules.filter { it.work_date == dateStr }
-                
+
                 Box(
                     modifier = Modifier
                         .aspectRatio(1f)
                         .clip(RoundedCornerShape(8.dp))
                         .background(
-                            if (daySchedules.isNotEmpty()) MaterialTheme.colorScheme.primaryContainer 
+                            if (daySchedules.isNotEmpty()) MaterialTheme.colorScheme.primaryContainer
                             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                         )
                         .clickable {
@@ -215,7 +338,7 @@ fun CalendarView(
                         )
                         if (daySchedules.isNotEmpty()) {
                             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                daySchedules.forEach { _ ->
+                                daySchedules.take(5).forEach { _ ->
                                     Box(
                                         modifier = Modifier
                                             .size(4.dp)
@@ -233,13 +356,27 @@ fun CalendarView(
 }
 
 @Composable
-fun ScheduleCard(item: ScheduleItem, tf: DateTimeFormatter) {
-    val formattedStart = item.start_time?.let { 
+fun ScheduleCard(item: ScheduleItem, tf: DateTimeFormatter, showEmployee: Boolean = false) {
+    val formattedStart = item.start_time?.let {
         runCatching { LocalTime.parse(it).format(tf) }.getOrElse { it }
     }
-    val formattedEnd = item.end_time?.let { 
+    val formattedEnd = item.end_time?.let {
         runCatching { LocalTime.parse(it).format(tf) }.getOrElse { it }
     }
+
+    // Effective time for display: use schedule override if present, otherwise shift default
+    val effectiveStart = item.start_time ?: item.shift_start_time
+    val effectiveEnd = item.end_time ?: item.shift_end_time
+    val isCustomTime = (item.start_time != null && item.start_time != item.shift_start_time) ||
+                       (item.end_time != null && item.end_time != item.shift_end_time)
+
+    val formattedEffectiveStart = effectiveStart?.let {
+        runCatching { LocalTime.parse(it).format(tf) }.getOrElse { it }
+    }
+    val formattedEffectiveEnd = effectiveEnd?.let {
+        runCatching { LocalTime.parse(it).format(tf) }.getOrElse { it }
+    }
+    val customTimeRange = listOfNotNull(formattedEffectiveStart, formattedEffectiveEnd).joinToString(" – ")
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -248,6 +385,21 @@ fun ScheduleCard(item: ScheduleItem, tf: DateTimeFormatter) {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
+            if (showEmployee && !item.employee_name.isNullOrBlank()) {
+                Text(
+                    text = item.employee_name!!,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            if (isCustomTime && customTimeRange.isNotBlank()) {
+                Text(
+                    text = "Aangepast: $customTimeRange",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
             Text(
                 text = item.location_name ?: "",
                 style = MaterialTheme.typography.bodyMedium

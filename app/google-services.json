@@ -1,19 +1,29 @@
 {
   "project_info": {
-    "project_number": "000000000000",
-    "project_id": "your-firebase-project",
-    "storage_bucket": "your-firebase-project.appspot.com"
+    "project_number": "965677013500",
+    "project_id": "serva-werkroosters",
+    "storage_bucket": "serva-werkroosters.firebasestorage.app"
   },
-  "client": [{
-    "client_info": {
-      "mobilesdk_app_id": "1:000000000000:android:placeholder",
-      "android_client_info": {
-        "package_name": "com.roosterplanner.app"
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:965677013500:android:b02025b97f7048ef74ba79",
+        "android_client_info": {
+          "package_name": "com.roosterplanner.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDyzMvzooI13w1xeh2afMoRNo6RLLb4PzM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
       }
-    },
-    "oauth_client": [],
-    "api_key": [{"current_key": "FIREBASE_API_KEY_HERE"}],
-    "services": {"appinvite_service": {"other_platform_oauth_client": []}}
-  }],
+    }
+  ],
   "configuration_version": "1"
 }

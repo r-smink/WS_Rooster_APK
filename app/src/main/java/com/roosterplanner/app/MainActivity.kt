@@ -89,6 +89,10 @@ class MainActivity : ComponentActivity() {
                 var swapStatus by remember { mutableStateOf<String?>(null) }
                 var timeoffItems by remember { mutableStateOf<List<TimeoffItem>>(emptyList()) }
                 var timeoffStatus by remember { mutableStateOf<String?>(null) }
+                var fullSchedules by remember { mutableStateOf<List<ScheduleItem>>(emptyList()) }
+                var monthStatus by remember { mutableStateOf<MonthStatusResponse?>(null) }
+                var scheduleFilter by remember { mutableStateOf(ScheduleFilter.PERSONAL) }
+                var selectedLocationId by remember { mutableStateOf<Long?>(null) }
                 val scope = rememberCoroutineScope()
                 val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
@@ -364,6 +368,28 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
 
+                            // Schedule: fetch data based on filter when month/filter/location changes
+                            LaunchedEffect(currentTab, selectedMonth, scheduleFilter, selectedLocationId, me?.locations) {
+                                if (currentTab == NavDest.SCHEDULE && me != null) {
+                                    if (scheduleFilter == ScheduleFilter.FULL) {
+                                        val locId = selectedLocationId ?: me?.locations?.firstOrNull()?.id
+                                        refreshFullSchedule(
+                                            repo, scope, selectedMonth, locId,
+                                            { loading = it }, { fullSchedules = it }, { monthStatus = it }
+                                        )
+                                    } else {
+                                        scope.launch {
+                                            loading = true
+                                            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+                                            val start = selectedMonth.atDay(1).format(formatter)
+                                            val end = selectedMonth.atEndOfMonth().format(formatter)
+                                            repo?.fetchSchedules(start, end)?.onSuccess { schedules = it }
+                                            loading = false
+                                        }
+                                    }
+                                }
+                            }
+
                             Column(modifier = Modifier.padding(padding)) {
                                 when (currentTab) {
                                     NavDest.DASHBOARD -> {
@@ -386,19 +412,30 @@ class MainActivity : ComponentActivity() {
                                     NavDest.SCHEDULE -> ScheduleScreen(
                                         me = me!!,
                                         schedules = schedules,
-                                        onRefresh = {
-                                            refreshSchedules(repo, scope, loadingSetter = { loading = it }) { schedules = it }
-                                        },
-                                        onDateRangeSelected = { start, end ->
-                                            scope.launch {
-                                                loading = true
-                                                val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-                                                repo?.fetchSchedules(start.format(formatter), end.format(formatter))?.onSuccess {
-                                                    schedules = it
-                                                }
-                                                loading = false
+                                        fullSchedules = fullSchedules,
+                                        monthStatus = monthStatus,
+                                        scheduleFilter = scheduleFilter,
+                                        selectedLocationId = selectedLocationId ?: me?.locations?.firstOrNull()?.id,
+                                        onFilterChange = { newFilter ->
+                                            scheduleFilter = newFilter
+                                            if (newFilter == ScheduleFilter.FULL && selectedLocationId == null) {
+                                                selectedLocationId = me?.locations?.firstOrNull()?.id
                                             }
                                         },
+                                        onLocationSelected = { locId -> selectedLocationId = locId },
+                                        onRefresh = {
+                                            if (scheduleFilter == ScheduleFilter.FULL) {
+                                                refreshFullSchedule(
+                                                    repo, scope, selectedMonth,
+                                                    selectedLocationId ?: me?.locations?.firstOrNull()?.id,
+                                                    { loading = it }, { fullSchedules = it }, { monthStatus = it }
+                                                )
+                                            } else {
+                                                refreshSchedules(repo, scope, loadingSetter = { loading = it }) { schedules = it }
+                                            }
+                                        },
+                                        onMonthChange = { ym -> selectedMonth = ym },
+                                        currentMonth = selectedMonth,
                                         onBack = { currentTab = NavDest.DASHBOARD }
                                     )
                                     NavDest.AVAILABILITY -> AvailabilityScreen(
@@ -652,5 +689,33 @@ private fun refreshSchedules(
         val result = repo?.fetchSchedules(start, end)
         loadingSetter(false)
         result?.onSuccess { onSchedules(it) }
+    }
+}
+
+private fun refreshFullSchedule(
+    repo: RoosterPlannerRepository?,
+    scope: kotlinx.coroutines.CoroutineScope,
+    month: java.time.YearMonth,
+    locationId: Long?,
+    loadingSetter: (Boolean) -> Unit,
+    onFullSchedules: (List<ScheduleItem>) -> Unit,
+    onMonthStatus: (MonthStatusResponse?) -> Unit
+) {
+    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+    val start = month.atDay(1).format(formatter)
+    val end = month.atEndOfMonth().format(formatter)
+    scope.launch {
+        loadingSetter(true)
+        val statusResult = repo?.fetchMonthStatus(month.toString(), locationId)
+        val status = statusResult?.getOrNull()
+        onMonthStatus(status)
+        if (status?.is_finalized == true) {
+            val fullResult = repo?.fetchSchedulesFull(start, end, locationId)
+            fullResult?.onSuccess { onFullSchedules(it) }
+                ?.onFailure { onFullSchedules(emptyList()) }
+        } else {
+            onFullSchedules(emptyList())
+        }
+        loadingSetter(false)
     }
 }

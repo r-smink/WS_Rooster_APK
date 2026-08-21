@@ -33,6 +33,19 @@ interface ApiService {
         @Query("end_date") endDate: String
     ): List<ScheduleItem>
 
+    @GET("wp-json/roosterplanner/v1/schedules/month-status")
+    suspend fun monthStatus(
+        @Query("month") month: String,
+        @Query("location_id") locationId: Long?
+    ): MonthStatusResponse
+
+    @GET("wp-json/roosterplanner/v1/schedules/full")
+    suspend fun schedulesFull(
+        @Query("start_date") startDate: String,
+        @Query("end_date") endDate: String,
+        @Query("location_id") locationId: Long?
+    ): List<ScheduleItem>
+
     @GET("wp-json/roosterplanner/v1/notifications")
     suspend fun notifications(
         @Query("limit") limit: Int = 50,

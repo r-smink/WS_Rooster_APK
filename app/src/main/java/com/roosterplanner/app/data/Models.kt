@@ -65,7 +65,18 @@ data class ScheduleItem(
     val shift_name: String?,
     val color: String?,
     val location_id: Long?,
-    val location_name: String?
+    val location_name: String?,
+    val employee_id: Long? = null,
+    val employee_name: String? = null,
+    val shift_start_time: String? = null,
+    val shift_end_time: String? = null
+)
+
+data class MonthStatusResponse(
+    val location_id: Long,
+    val month: String,
+    val is_finalized: Boolean,
+    val finalized_at: String? = null
 )
 
 data class AvailabilityResponse(

@@ -29,6 +29,21 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.*
 
+fun roundTimeTo30Min(time: String?): String? {
+    if (time.isNullOrBlank()) return time
+    val parts = time.split(":")
+    if (parts.size != 2) return time
+    val hours = parts[0].toIntOrNull() ?: return time
+    val minutes = parts[1].toIntOrNull() ?: return time
+    if (hours !in 0..23 || minutes !in 0..59) return time
+
+    val totalMinutes = hours * 60 + minutes
+    val rounded = (kotlin.math.round(totalMinutes / 30.0) * 30).toInt() % (24 * 60)
+    val newHours = rounded / 60
+    val newMinutes = rounded % 60
+    return "%02d:%02d".format(newHours, newMinutes)
+}
+
 @Composable
 fun AvailabilityScreen(
     month: String,
@@ -199,14 +214,14 @@ fun CalendarDayCell(
 ) {
     val backgroundColor = when {
         !entry.is_available -> MaterialTheme.colorScheme.errorContainer
-        entry.id != null && entry.shift_preference != null -> MaterialTheme.colorScheme.primaryContainer
-        entry.id != null -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+        entry.shift_preference != null -> MaterialTheme.colorScheme.primaryContainer
+        entry.is_available -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
         else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)
     }
-    
+
     val contentColor = when {
         !entry.is_available -> MaterialTheme.colorScheme.onErrorContainer
-        entry.id != null -> MaterialTheme.colorScheme.onPrimaryContainer
+        entry.is_available -> MaterialTheme.colorScheme.onPrimaryContainer
         else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
     }
 
@@ -248,8 +263,8 @@ fun EditAvailabilityDialog(
 ) {
     var isAvailable by remember { mutableStateOf(entry.is_available) }
     var selectedShiftId by remember { mutableStateOf(entry.shift_preference) }
-    var customStart by remember { mutableStateOf(entry.custom_start ?: "") }
-    var customEnd by remember { mutableStateOf(entry.custom_end ?: "") }
+    var customStart by remember { mutableStateOf(roundTimeTo30Min(entry.custom_start) ?: "") }
+    var customEnd by remember { mutableStateOf(roundTimeTo30Min(entry.custom_end) ?: "") }
     var notes by remember { mutableStateOf(entry.notes ?: "") }
     var expanded by remember { mutableStateOf(false) }
 
@@ -312,14 +327,14 @@ fun EditAvailabilityDialog(
                     ) {
                         OutlinedTextField(
                             value = customStart,
-                            onValueChange = { customStart = it },
+                            onValueChange = { customStart = roundTimeTo30Min(it) ?: it },
                             label = { Text("Start (HH:mm)") },
                             modifier = Modifier.weight(1f),
                             singleLine = true
                         )
                         OutlinedTextField(
                             value = customEnd,
-                            onValueChange = { customEnd = it },
+                            onValueChange = { customEnd = roundTimeTo30Min(it) ?: it },
                             label = { Text("Eind (HH:mm)") },
                             modifier = Modifier.weight(1f),
                             singleLine = true
@@ -341,8 +356,8 @@ fun EditAvailabilityDialog(
                 onSave(entry.copy(
                     is_available = isAvailable,
                     shift_preference = selectedShiftId,
-                    custom_start = customStart.takeIf { it.isNotBlank() },
-                    custom_end = customEnd.takeIf { it.isNotBlank() },
+                    custom_start = roundTimeTo30Min(customStart.takeIf { it.isNotBlank() }),
+                    custom_end = roundTimeTo30Min(customEnd.takeIf { it.isNotBlank() }),
                     notes = notes.takeIf { it.isNotBlank() }
                 ))
             }) {

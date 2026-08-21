@@ -26,6 +26,12 @@ class RoosterPlannerRepository(private var api: ApiService) {
     suspend fun fetchSchedules(startDate: String, endDate: String): Result<List<ScheduleItem>> =
         runApi { api.schedules(startDate, endDate) }
 
+    suspend fun fetchMonthStatus(month: String, locationId: Long? = null): Result<MonthStatusResponse> =
+        runApi { api.monthStatus(month, locationId) }
+
+    suspend fun fetchSchedulesFull(startDate: String, endDate: String, locationId: Long? = null): Result<List<ScheduleItem>> =
+        runApi { api.schedulesFull(startDate, endDate, locationId) }
+
     suspend fun fetchNotifications(limit: Int = 50, unreadOnly: Boolean = false): Result<List<NotificationItem>> =
         runApi { api.notifications(limit, if (unreadOnly) 1 else 0) }
 
