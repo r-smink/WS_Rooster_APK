@@ -70,6 +70,9 @@ fun TimeoffScreen(
         "appointment" to "Afspraak/dokter",
         "other" to "Overig"
     )
+    val duplicateRequestExists = startDate != null && endDate != null && items.any {
+        it.start_date == startDate.toString() && it.end_date == endDate.toString() && it.status != "rejected"
+    }
 
     LaunchedEffect(Unit) { onRefresh() }
 
@@ -171,10 +174,18 @@ fun TimeoffScreen(
                                     reason = ""
                                 }
                             },
-                            enabled = startDate != null && endDate != null && !loading,
+                            enabled = startDate != null && endDate != null && !loading && !duplicateRequestExists,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(if (loading) "Verzenden..." else "Verlof Aanvragen")
+                        }
+
+                        if (duplicateRequestExists) {
+                            Text(
+                                "Voor deze periode bestaat al een verlofaanvraag.",
+                                color = MaterialTheme.colorScheme.tertiary,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
                         }
 
                         if (!status.isNullOrBlank()) {

@@ -1,22 +1,48 @@
-.gradle/config.properties
-.gradle/file-system.probe
-.gradle/8.13/checksums/checksums.lock
-.gradle/8.13/checksums/md5-checksums.bin
-.gradle/8.13/checksums/sha1-checksums.bin
-.gradle/8.13/executionHistory/executionHistory.lock
-.gradle/8.13/fileHashes/fileHashes.bin
-.gradle/8.13/fileHashes/fileHashes.lock
-.gradle/8.5/gc.properties
-.gradle/8.5/checksums/checksums.lock
-.gradle/8.5/checksums/md5-checksums.bin
-.gradle/8.5/checksums/sha1-checksums.bin
-.gradle/8.5/dependencies-accessors/dependencies-accessors.lock
-.gradle/8.5/dependencies-accessors/gc.properties
-.gradle/8.5/executionHistory/executionHistory.bin
-.gradle/8.5/executionHistory/executionHistory.lock
-.gradle/8.5/fileChanges/last-build.bin
-.gradle/8.5/fileHashes/fileHashes.bin
-.gradle/8.5/fileHashes/resourceHashesCache.bin
-.gradle/buildOutputCleanup/buildOutputCleanup.lock
-.gradle/buildOutputCleanup/cache.properties
-.gradle/vcs-1/gc.properties
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Files for the ART/DALVIK VM
+*.dex
+
+# Java class files
+*.class
+
+# Gradle files and build outputs
+.gradle/
+build/
+*/build/
+.kotlin/
+
+# Local configuration
+local.properties
+
+# Log files and heap dumps
+*.log
+*.hprof
+hs_err_pid*
+
+# Android Studio / IntelliJ IDEA
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/deploymentTargetSelector.xml
+.idea/deviceStreaming.xml
+*.iml
+*.iws
+*.ipr
+.navigation/
+captures/
+.externalNativeBuild
+.cxx/
+
+# Keystore files
+*.jks
+*.keystore
+
+# OS generated files
+.DS_Store
+Thumbs.db

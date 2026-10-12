@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("com.google.gms.google-services")
     id("org.jetbrains.kotlin.plugin.compose")
 }
@@ -13,17 +12,15 @@ android {
         applicationId = "com.roosterplanner.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.3.0"
+        versionCode = 11
+        versionName = "2.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
         create("release") {
-            // Dit verwijst naar de keystore die je zojuist hebt aangemaakt
             storeFile = file("rooster-release-key.jks")
-            // De wachtwoorden kun je hier invullen of later via de wizard doen
             storePassword = "REMOVED"
             keyAlias = "rooster-alias"
             keyPassword = "REMOVED"
@@ -32,14 +29,13 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true // Beveiligt je code en maakt de app kleiner
+            isMinifyEnabled = true
             isShrinkResources = true
             signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Hiermee worden de foutopsporingssymbolen voor native libraries meegeleverd
             ndk {
                 debugSymbolLevel = "FULL"
             }
@@ -50,8 +46,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
+
+    // Recommended way for Kotlin 2.0+ to avoid extension conflicts
+    kotlin {
+        jvmToolchain(17)
     }
 
     buildFeatures {
@@ -86,7 +84,7 @@ dependencies {
     implementation("com.google.android.material:material:1.13.0")
 
     // Firebase BoM & Messaging
-    implementation(platform("com.google.firebase:firebase-bom:34.14.0"))
+    implementation(platform("com.google.firebase:firebase-bom:34.10.0"))
     implementation("com.google.firebase:firebase-messaging")
     implementation("com.google.firebase:firebase-analytics")
 

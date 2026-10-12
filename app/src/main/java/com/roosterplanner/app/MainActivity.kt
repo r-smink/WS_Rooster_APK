@@ -11,6 +11,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,7 +23,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -65,6 +68,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             RoosterPlannerTheme {
                 val context = LocalContext.current
+                val focusManager = LocalFocusManager.current
                 val snackbarHostState = remember { SnackbarHostState() }
                 var config by remember { mutableStateOf<AuthConfig?>(null) }
                 var repo by remember { mutableStateOf<RoosterPlannerRepository?>(null) }
@@ -390,7 +394,13 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
 
-                            Column(modifier = Modifier.padding(padding)) {
+                            Column(
+                                modifier = Modifier
+                                    .padding(padding)
+                                    .pointerInput(Unit) {
+                                        detectTapGestures { focusManager.clearFocus() }
+                                    }
+                            ) {
                                 when (currentTab) {
                                     NavDest.DASHBOARD -> {
                                         val nextShift = schedules.firstOrNull { 

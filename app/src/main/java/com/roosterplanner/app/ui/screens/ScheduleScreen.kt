@@ -411,6 +411,12 @@ fun ScheduleCard(item: ScheduleItem, tf: DateTimeFormatter, showEmployee: Boolea
             val timeRange = listOfNotNull(formattedStart, formattedEnd).joinToString(" – ")
             if (timeRange.isNotBlank()) {
                 Text(timeRange, color = MaterialTheme.colorScheme.primary)
+            } else if (effectiveStart == null && effectiveEnd == null) {
+                Text(
+                    "Flexibel",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
             }
             if (!item.notes.isNullOrBlank()) {
                 Spacer(Modifier.height(6.dp))

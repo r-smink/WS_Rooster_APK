@@ -4,6 +4,9 @@ package com.roosterplanner.app.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -18,9 +21,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import com.roosterplanner.app.data.AvailabilityEntryRequest
 import com.roosterplanner.app.data.Shift
 import java.time.LocalDate
@@ -29,19 +34,14 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.*
 
-fun roundTimeTo30Min(time: String?): String? {
-    if (time.isNullOrBlank()) return time
+private fun normalizeTimeToHalfHour(time: String?): String {
+    if (time.isNullOrBlank()) return ""
     val parts = time.split(":")
-    if (parts.size != 2) return time
-    val hours = parts[0].toIntOrNull() ?: return time
-    val minutes = parts[1].toIntOrNull() ?: return time
-    if (hours !in 0..23 || minutes !in 0..59) return time
-
-    val totalMinutes = hours * 60 + minutes
-    val rounded = (kotlin.math.round(totalMinutes / 30.0) * 30).toInt() % (24 * 60)
-    val newHours = rounded / 60
-    val newMinutes = rounded % 60
-    return "%02d:%02d".format(newHours, newMinutes)
+    if (parts.size != 2) return ""
+    val hours = parts[0].toIntOrNull() ?: return ""
+    val minutes = parts[1].toIntOrNull() ?: return ""
+    if (hours !in 0..23 || minutes !in 0..59) return ""
+    return "%02d:%02d".format(hours, if (minutes >= 30) 30 else 0)
 }
 
 @Composable
@@ -263,10 +263,35 @@ fun EditAvailabilityDialog(
 ) {
     var isAvailable by remember { mutableStateOf(entry.is_available) }
     var selectedShiftId by remember { mutableStateOf(entry.shift_preference) }
-    var customStart by remember { mutableStateOf(roundTimeTo30Min(entry.custom_start) ?: "") }
-    var customEnd by remember { mutableStateOf(roundTimeTo30Min(entry.custom_end) ?: "") }
+    var customStart by remember { mutableStateOf(normalizeTimeToHalfHour(entry.custom_start)) }
+    var customEnd by remember { mutableStateOf(normalizeTimeToHalfHour(entry.custom_end)) }
     var notes by remember { mutableStateOf(entry.notes ?: "") }
     var expanded by remember { mutableStateOf(false) }
+    var showStartPicker by remember { mutableStateOf(false) }
+    var showEndPicker by remember { mutableStateOf(false) }
+
+    if (showStartPicker) {
+        TimeWheelPickerDialog(
+            title = "Starttijd",
+            initialTime = customStart.takeIf { it.isNotBlank() },
+            onDismiss = { showStartPicker = false },
+            onConfirm = {
+                customStart = it ?: ""
+                showStartPicker = false
+            }
+        )
+    }
+    if (showEndPicker) {
+        TimeWheelPickerDialog(
+            title = "Eindtijd",
+            initialTime = customEnd.takeIf { it.isNotBlank() },
+            onDismiss = { showEndPicker = false },
+            onConfirm = {
+                customEnd = it ?: ""
+                showEndPicker = false
+            }
+        )
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -325,19 +350,17 @@ fun EditAvailabilityDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        OutlinedTextField(
+                        TimePickerField(
+                            label = "Start",
                             value = customStart,
-                            onValueChange = { customStart = roundTimeTo30Min(it) ?: it },
-                            label = { Text("Start (HH:mm)") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
+                            onClick = { showStartPicker = true },
+                            modifier = Modifier.weight(1f)
                         )
-                        OutlinedTextField(
+                        TimePickerField(
+                            label = "Eind",
                             value = customEnd,
-                            onValueChange = { customEnd = roundTimeTo30Min(it) ?: it },
-                            label = { Text("Eind (HH:mm)") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
+                            onClick = { showEndPicker = true },
+                            modifier = Modifier.weight(1f)
                         )
                     }
 
@@ -356,8 +379,8 @@ fun EditAvailabilityDialog(
                 onSave(entry.copy(
                     is_available = isAvailable,
                     shift_preference = selectedShiftId,
-                    custom_start = roundTimeTo30Min(customStart.takeIf { it.isNotBlank() }),
-                    custom_end = roundTimeTo30Min(customEnd.takeIf { it.isNotBlank() }),
+                    custom_start = customStart.takeIf { it.isNotBlank() },
+                    custom_end = customEnd.takeIf { it.isNotBlank() },
                     notes = notes.takeIf { it.isNotBlank() }
                 ))
             }) {
@@ -370,6 +393,187 @@ fun EditAvailabilityDialog(
             }
         }
     )
+}
+
+@Composable
+private fun TimePickerField(
+    label: String,
+    value: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {},
+            readOnly = true,
+            enabled = false,
+            label = { Text(label) },
+            placeholder = { Text("--:--") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                disabledBorderColor = MaterialTheme.colorScheme.outline,
+                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            )
+        )
+        Box(modifier = Modifier.matchParentSize().clickable(onClick = onClick))
+    }
+}
+
+@Composable
+private fun TimeWheelPickerDialog(
+    title: String,
+    initialTime: String?,
+    onDismiss: () -> Unit,
+    onConfirm: (String?) -> Unit
+) {
+    val hourValues = (0..23).toList()
+    val minuteValues = listOf(0, 30)
+
+    val initialHour = initialTime?.substringBefore(':')?.toIntOrNull()?.coerceIn(0, 23) ?: 9
+    val initialMinuteIndex = initialTime?.substringAfter(':')?.toIntOrNull()?.let { if (it >= 30) 1 else 0 } ?: 0
+
+    var hourIndex by remember { mutableIntStateOf(hourValues.indexOf(initialHour).coerceAtLeast(0)) }
+    var minuteIndex by remember { mutableIntStateOf(initialMinuteIndex) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                WheelColumn(
+                    items = hourValues.map { "%02d".format(it) },
+                    selectedIndex = hourIndex,
+                    onSelectedIndexChange = { hourIndex = it },
+                    modifier = Modifier.width(72.dp)
+                )
+                Text(
+                    ":",
+                    style = MaterialTheme.typography.headlineMedium,
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+                WheelColumn(
+                    items = minuteValues.map { "%02d".format(it) },
+                    selectedIndex = minuteIndex,
+                    onSelectedIndexChange = { minuteIndex = it },
+                    modifier = Modifier.width(72.dp)
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                onConfirm("%02d:%02d".format(hourValues[hourIndex], minuteValues[minuteIndex]))
+            }) {
+                Text("OK")
+            }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { onConfirm(null) }) { Text("Wissen") }
+                TextButton(onClick = onDismiss) { Text("Annuleren") }
+            }
+        }
+    )
+}
+
+@Composable
+private fun WheelColumn(
+    items: List<String>,
+    selectedIndex: Int,
+    onSelectedIndexChange: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val itemHeight = 40.dp
+    val visibleCount = 5
+    val density = LocalDensity.current
+    val itemHeightPx = with(density) { itemHeight.toPx() }
+    val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+
+    fun scrollTargetFor(index: Int): Pair<Int, Int> =
+        (index - visibleCount / 2).coerceAtLeast(0) to if (index == 1) itemHeightPx.toInt() else 0
+
+    LaunchedEffect(Unit) {
+        val (index, offset) = scrollTargetFor(selectedIndex)
+        listState.scrollToItem(index, offset)
+    }
+
+    val centeredIndex by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            if (info.visibleItemsInfo.isEmpty()) {
+                selectedIndex
+            } else {
+                val viewportCenter = (info.viewportStartOffset + info.viewportEndOffset) / 2
+                info.visibleItemsInfo.minByOrNull {
+                    kotlin.math.abs(it.offset + it.size / 2 - viewportCenter)
+                }?.index?.coerceIn(0, items.lastIndex) ?: selectedIndex
+            }
+        }
+    }
+
+    LaunchedEffect(centeredIndex) { onSelectedIndexChange(centeredIndex) }
+
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (!listState.isScrollInProgress) {
+            val (index, offset) = scrollTargetFor(centeredIndex)
+            if (listState.firstVisibleItemIndex != index || listState.firstVisibleItemScrollOffset != offset) {
+                listState.animateScrollToItem(index, offset)
+            }
+        }
+    }
+
+    Box(
+        modifier = modifier.height(itemHeight * visibleCount),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(itemHeight)
+                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(8.dp))
+        )
+        LazyColumn(
+            state = listState,
+            contentPadding = PaddingValues(vertical = itemHeight * (visibleCount / 2)),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            items(items.size) { index ->
+                val selected = index == centeredIndex
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(itemHeight)
+                        .clickable {
+                            onSelectedIndexChange(index)
+                            scope.launch {
+                                val (target, offset) = scrollTargetFor(index)
+                                listState.animateScrollToItem(target, offset)
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = items[index],
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        }
+                    )
+                }
+            }
+        }
+    }
 }
 
 private fun buildMonthDays(month: YearMonth): List<String> {
