@@ -51,7 +51,7 @@ fun ScheduleScreen(
     currentMonth: YearMonth,
     onBack: () -> Unit
 ) {
-    var viewMode by remember { mutableStateOf(ScheduleViewMode.LIST) }
+    var viewMode by remember { mutableStateOf(ScheduleViewMode.CALENDAR) }
     val tf = DateTimeFormatter.ofPattern("HH:mm")
 
     val activeSchedules = if (scheduleFilter == ScheduleFilter.FULL) fullSchedules else schedules
@@ -244,10 +244,13 @@ fun CalendarView(
     if (selectedDateShifts.isNotEmpty()) {
         AlertDialog(
             onDismissRequest = { selectedDateShifts = emptyList() },
-            title = { Text("Diensten op $selectedDateStr") },
+            title = { Text(formatDutchDate(selectedDateStr)) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    selectedDateShifts.forEach { shift ->
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 480.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(selectedDateShifts) { shift ->
                         ScheduleCard(shift, tf, showEmployee = showEmployee)
                     }
                 }

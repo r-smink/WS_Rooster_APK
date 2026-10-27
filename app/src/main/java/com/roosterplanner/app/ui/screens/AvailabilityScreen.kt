@@ -3,6 +3,7 @@ package com.roosterplanner.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,8 +12,12 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
@@ -21,7 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -44,6 +48,16 @@ private fun normalizeTimeToHalfHour(time: String?): String {
     return "%02d:%02d".format(hours, if (minutes >= 30) 30 else 0)
 }
 
+/** "2026-10-22" -> "Donderdag 22 oktober 2026" */
+fun formatDutchDate(isoDate: String): String {
+    val dutch = Locale("nl")
+    return runCatching {
+        LocalDate.parse(isoDate)
+            .format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", dutch))
+            .replaceFirstChar { it.titlecase(dutch) }
+    }.getOrElse { isoDate }
+}
+
 @Composable
 fun AvailabilityScreen(
     month: String,
@@ -57,7 +71,8 @@ fun AvailabilityScreen(
     val ymFormatter = DateTimeFormatter.ofPattern("yyyy-MM")
     var currentMonth by remember { mutableStateOf(YearMonth.parse(month, ymFormatter)) }
     var selectedDateForEdit by remember { mutableStateOf<AvailabilityEntryRequest?>(null) }
-    
+    var viewMode by remember { mutableStateOf(ScheduleViewMode.CALENDAR) }
+
     // Local copy of entries
     val entriesState = remember { mutableStateMapOf<String, AvailabilityEntryRequest>() }
     
@@ -111,59 +126,85 @@ fun AvailabilityScreen(
                 fontWeight = FontWeight.Bold
             )
             
-            IconButton(onClick = {
-                val next = currentMonth.plusMonths(1)
-                currentMonth = next
-                onMonthChange(next)
-            }) {
-                Icon(Icons.Default.ChevronRight, contentDescription = "Volgende")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = {
+                    val next = currentMonth.plusMonths(1)
+                    currentMonth = next
+                    onMonthChange(next)
+                }) {
+                    Icon(Icons.Default.ChevronRight, contentDescription = "Volgende")
+                }
+                IconButton(onClick = {
+                    viewMode = if (viewMode == ScheduleViewMode.LIST) ScheduleViewMode.CALENDAR else ScheduleViewMode.LIST
+                }) {
+                    Icon(
+                        if (viewMode == ScheduleViewMode.LIST) Icons.Default.CalendarMonth else Icons.AutoMirrored.Filled.List,
+                        contentDescription = "Switch weergave"
+                    )
+                }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Weekdays Header
-        Row(modifier = Modifier.fillMaxWidth()) {
-            val weekDays = listOf("Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo")
-            weekDays.forEach { day ->
-                Text(
-                    text = day,
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+        if (viewMode == ScheduleViewMode.LIST) {
+            val sortedEntries = entriesState.values.sortedBy { it.date }
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(sortedEntries, key = { it.date }) { entry ->
+                    AvailabilityCard(
+                        entry = entry,
+                        shifts = shifts,
+                        onClick = { selectedDateForEdit = entry }
+                    )
+                }
             }
-        }
+        } else {
+            // Weekdays Header
+            Row(modifier = Modifier.fillMaxWidth()) {
+                val weekDays = listOf("Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo")
+                weekDays.forEach { day ->
+                    Text(
+                        text = day,
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        // Calendar Grid
-        val firstDayOfMonth = currentMonth.atDay(1)
-        val dayOfWeek = firstDayOfMonth.dayOfWeek.value // 1 (Mon) to 7 (Sun)
-        val daysInMonth = currentMonth.lengthOfMonth()
-        
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(7),
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Empty spaces for previous month
-            items(dayOfWeek - 1) { Spacer(Modifier) }
-            
-            // Days of the month
-            items(daysInMonth) { dayIndex ->
-                val day = dayIndex + 1
-                val dateStr = currentMonth.atDay(day).format(DateTimeFormatter.ISO_DATE)
-                val entry = entriesState[dateStr] ?: AvailabilityEntryRequest(date = dateStr, is_available = true)
-                
-                CalendarDayCell(
-                    day = day,
-                    entry = entry,
-                    onClick = { selectedDateForEdit = entry }
-                )
+            // Calendar Grid
+            val firstDayOfMonth = currentMonth.atDay(1)
+            val dayOfWeek = firstDayOfMonth.dayOfWeek.value // 1 (Mon) to 7 (Sun)
+            val daysInMonth = currentMonth.lengthOfMonth()
+
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(7),
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Empty spaces for previous month
+                items(dayOfWeek - 1) { Spacer(Modifier) }
+
+                // Days of the month
+                items(daysInMonth) { dayIndex ->
+                    val day = dayIndex + 1
+                    val dateStr = currentMonth.atDay(day).format(DateTimeFormatter.ISO_DATE)
+                    val entry = entriesState[dateStr] ?: AvailabilityEntryRequest(date = dateStr, is_available = true)
+
+                    CalendarDayCell(
+                        day = day,
+                        entry = entry,
+                        onClick = { selectedDateForEdit = entry }
+                    )
+                }
             }
         }
 
@@ -253,6 +294,58 @@ fun CalendarDayCell(
     }
 }
 
+@Composable
+fun AvailabilityCard(
+    entry: AvailabilityEntryRequest,
+    shifts: List<Shift>,
+    onClick: () -> Unit
+) {
+    val containerColor = when {
+        !entry.is_available -> MaterialTheme.colorScheme.errorContainer
+        entry.shift_preference != null -> MaterialTheme.colorScheme.primaryContainer
+        else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+    }
+    val contentColor = if (entry.is_available) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onErrorContainer
+    }
+    val shiftName = entry.shift_preference?.let { id -> shifts.firstOrNull { it.id == id }?.name }
+    val timeRange = listOfNotNull(entry.custom_start, entry.custom_end).joinToString(" – ")
+
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = containerColor, contentColor = contentColor)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = formatDutchDate(entry.date),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = if (entry.is_available) "Beschikbaar" else "Niet beschikbaar",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
+            if (entry.is_available && shiftName != null) {
+                Text("Voorkeur: $shiftName", style = MaterialTheme.typography.bodyMedium)
+            }
+            if (entry.is_available && timeRange.isNotBlank()) {
+                Text(timeRange, color = MaterialTheme.colorScheme.primary)
+            }
+            if (!entry.notes.isNullOrBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    entry.notes!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = contentColor.copy(alpha = 0.7f)
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditAvailabilityDialog(
@@ -295,9 +388,12 @@ fun EditAvailabilityDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Beschikbaarheid ${entry.date}") },
+        title = { Text(formatDutchDate(entry.date)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -492,13 +588,15 @@ private fun WheelColumn(
 ) {
     val itemHeight = 40.dp
     val visibleCount = 5
-    val density = LocalDensity.current
-    val itemHeightPx = with(density) { itemHeight.toPx() }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val currentOnSelectedIndexChange by rememberUpdatedState(onSelectedIndexChange)
 
-    fun scrollTargetFor(index: Int): Pair<Int, Int> =
-        (index - visibleCount / 2).coerceAtLeast(0) to if (index == 1) itemHeightPx.toInt() else 0
+    // contentPadding already reserves visibleCount / 2 rows above the first item,
+    // so scrolling item `index` to the top of the content area centers it.
+    // (Subtracting visibleCount / 2 here made every snap land 2 rows higher,
+    // which cascaded the wheel back to "01".)
+    fun scrollTargetFor(index: Int): Pair<Int, Int> = index to 0
 
     LaunchedEffect(Unit) {
         val (index, offset) = scrollTargetFor(selectedIndex)
@@ -519,7 +617,7 @@ private fun WheelColumn(
         }
     }
 
-    LaunchedEffect(centeredIndex) { onSelectedIndexChange(centeredIndex) }
+    LaunchedEffect(centeredIndex) { currentOnSelectedIndexChange(centeredIndex) }
 
     LaunchedEffect(listState.isScrollInProgress) {
         if (!listState.isScrollInProgress) {
@@ -542,6 +640,7 @@ private fun WheelColumn(
         )
         LazyColumn(
             state = listState,
+            flingBehavior = rememberSnapFlingBehavior(listState),
             contentPadding = PaddingValues(vertical = itemHeight * (visibleCount / 2)),
             modifier = Modifier.fillMaxSize()
         ) {
