@@ -97,6 +97,9 @@ class MainActivity : ComponentActivity() {
                 var monthStatus by remember { mutableStateOf<MonthStatusResponse?>(null) }
                 var scheduleFilter by remember { mutableStateOf(ScheduleFilter.PERSONAL) }
                 var selectedLocationId by remember { mutableStateOf<Long?>(null) }
+                var approvals by remember { mutableStateOf<ApprovalsResponse?>(null) }
+                var approvalsStatus by remember { mutableStateOf<String?>(null) }
+                var chatReloadKey by remember { mutableStateOf(0) }
                 val scope = rememberCoroutineScope()
                 val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
@@ -108,6 +111,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(pendingTargetUrl) {
                     pendingTargetUrl?.let { url ->
                         when {
+                            url.contains("teamleider") -> currentTab = NavDest.TEAMLEADER
                             url.contains("/chat") -> currentTab = NavDest.CHAT
                             url.contains("/notifications") -> currentTab = NavDest.NOTIFICATIONS
                             url.contains("/schedule") -> currentTab = NavDest.SCHEDULE
@@ -177,7 +181,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 // Chat Polling Handler
-                LaunchedEffect(config, currentTab) {
+                LaunchedEffect(config, currentTab, chatReloadKey) {
                     if (config != null && currentTab == NavDest.CHAT) {
                         chatError = null
                         // Initial load
@@ -268,7 +272,7 @@ class MainActivity : ComponentActivity() {
                                 }
                                 HorizontalDivider()
                                 Spacer(modifier = Modifier.height(8.dp))
-                                NavDest.values().forEach { dest ->
+                                NavDest.values().filter { it != NavDest.TEAMLEADER || me?.employee?.is_admin == true }.forEach { dest ->
                                     NavigationDrawerItem(
                                         label = { Text(dest.label) },
                                         selected = currentTab == dest,
@@ -369,6 +373,11 @@ class MainActivity : ComponentActivity() {
                                 if (currentTab == NavDest.TIMEOFF) {
                                     timeoffStatus = null
                                     repo?.fetchTimeoff()?.onSuccess { timeoffItems = it.items }
+                                }
+                                if (currentTab == NavDest.TEAMLEADER) {
+                                    approvalsStatus = null
+                                    repo?.fetchApprovals()?.onSuccess { approvals = it }
+                                        ?.onFailure { approvalsStatus = it.apiMessage() ?: "Kon verzoeken niet laden" }
                                 }
                             }
 
@@ -518,17 +527,17 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             }
                                         },
-                                        onRequestSwap = { scheduleId, colleagueId, reason ->
+                                        onRequestSwap = { scheduleId, colleagueId, reason, partStart, partEnd ->
                                             scope.launch {
-                                                val result = repo?.requestSwap(scheduleId, colleagueId, reason)
+                                                val result = repo?.requestSwap(scheduleId, colleagueId, reason, partStart, partEnd)
                                                 if (result?.isSuccess == true) {
-                                                    swapStatus = "Ruilverzoek ingediend"
+                                                    swapStatus = if (colleagueId == null) "Dienst aangeboden aan je collega's" else "Ruilverzoek verstuurd"
                                                     repo?.fetchSwapRequests()?.onSuccess {
                                                         swapIncoming = it.incoming
                                                         swapMine = it.mine
                                                     }
                                                 } else {
-                                                    swapStatus = "Ruilverzoek indienen mislukt"
+                                                    swapStatus = result?.exceptionOrNull()?.apiMessage() ?: "Ruilverzoek indienen mislukt"
                                                 }
                                             }
                                         },
@@ -536,13 +545,13 @@ class MainActivity : ComponentActivity() {
                                             scope.launch {
                                                 val result = repo?.respondSwap(swapId, action)
                                                 if (result?.isSuccess == true) {
-                                                    swapStatus = if (action == "accept") "Verzoek geaccepteerd" else "Verzoek afgewezen"
+                                                    swapStatus = if (action == "accept") "Geaccepteerd, wacht op goedkeuring van de teamleider" else "Verzoek afgewezen"
                                                     repo?.fetchSwapRequests()?.onSuccess {
                                                         swapIncoming = it.incoming
                                                         swapMine = it.mine
                                                     }
                                                 } else {
-                                                    swapStatus = "Kon niet reageren op verzoek"
+                                                    swapStatus = result?.exceptionOrNull()?.apiMessage() ?: "Kon niet reageren op verzoek"
                                                 }
                                             }
                                         },
@@ -550,11 +559,11 @@ class MainActivity : ComponentActivity() {
                                             scope.launch {
                                                 val result = repo?.claimShift(scheduleId)
                                                 if (result?.isSuccess == true) {
-                                                    swapStatus = "Dienst overgenomen"
+                                                    swapStatus = "Aangevraagd, wacht op goedkeuring van de teamleider"
                                                     repo?.fetchAvailableShifts()?.onSuccess { swapAvailable = it.shifts }
                                                     repo?.fetchMyShiftsForSwap()?.onSuccess { swapMyShifts = it.shifts }
                                                 } else {
-                                                    swapStatus = "Dienst overnemen mislukt"
+                                                    swapStatus = result?.exceptionOrNull()?.apiMessage() ?: "Dienst overnemen mislukt"
                                                 }
                                             }
                                         },
@@ -599,7 +608,8 @@ class MainActivity : ComponentActivity() {
                                             }
                                         },
                                         onBack = { currentTab = NavDest.DASHBOARD },
-                                        error = chatError
+                                        error = chatError,
+                                        onRefresh = { chatReloadKey++ }
                                     )
                                     NavDest.SICK -> SickScreen(
                                         teamPhoneContacts = teamPhoneContacts,
@@ -612,6 +622,37 @@ class MainActivity : ComponentActivity() {
                                         },
                                         loading = loading,
                                         status = error
+                                    )
+                                    NavDest.TEAMLEADER -> TeamleaderScreen(
+                                        approvals = approvals,
+                                        status = approvalsStatus,
+                                        onRefresh = {
+                                            scope.launch {
+                                                repo?.fetchApprovals()?.onSuccess { approvals = it }
+                                            }
+                                        },
+                                        onDecideSwap = { id, approve, notes ->
+                                            scope.launch {
+                                                val result = repo?.decideSwap(id, approve, notes)
+                                                approvalsStatus = if (result?.isSuccess == true) {
+                                                    if (approve) "Ruil goedgekeurd, het rooster is bijgewerkt" else "Ruilverzoek afgewezen"
+                                                } else {
+                                                    result?.exceptionOrNull()?.apiMessage() ?: "Kon ruilverzoek niet verwerken"
+                                                }
+                                                repo?.fetchApprovals()?.onSuccess { approvals = it }
+                                            }
+                                        },
+                                        onDecideTimeoff = { id, approve, notes ->
+                                            scope.launch {
+                                                val result = repo?.decideTimeoff(id, approve, notes)
+                                                approvalsStatus = if (result?.isSuccess == true) {
+                                                    if (approve) "Verlof goedgekeurd" else "Verlof afgewezen"
+                                                } else {
+                                                    result?.exceptionOrNull()?.apiMessage() ?: "Kon verlofaanvraag niet verwerken"
+                                                }
+                                                repo?.fetchApprovals()?.onSuccess { approvals = it }
+                                            }
+                                        }
                                     )
                                     NavDest.NOTIFICATIONS -> NotificationsScreen(
                                         notifications = notifications,
@@ -682,6 +723,7 @@ private fun iconFor(tab: NavDest) = when (tab) {
     NavDest.CHAT -> Icons.AutoMirrored.Filled.Chat
     NavDest.SICK -> Icons.Default.MedicalInformation
     NavDest.NOTIFICATIONS -> Icons.Default.Notifications
+    NavDest.TEAMLEADER -> Icons.Default.AssignmentTurnedIn
 }
 
 private fun refreshSchedules(

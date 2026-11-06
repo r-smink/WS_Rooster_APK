@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.MedicalInformation
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.BeachAccess
+import androidx.compose.material.icons.filled.AssignmentTurnedIn
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Button
@@ -168,7 +169,9 @@ fun DashboardScreen(
             DashboardMenuItem(NavDest.CHAT, "Chat", Icons.AutoMirrored.Filled.Chat),
             DashboardMenuItem(NavDest.SICK, "Ziek melden", Icons.Default.MedicalInformation),
             DashboardMenuItem(NavDest.NOTIFICATIONS, "Meldingen", Icons.Default.Notifications)
-        )
+        ) + if (me.employee.is_admin) listOf(
+            DashboardMenuItem(NavDest.TEAMLEADER, "Teamleider", Icons.Default.AssignmentTurnedIn)
+        ) else emptyList()
 
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),

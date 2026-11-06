@@ -1,9 +1,11 @@
 package com.roosterplanner.app.ui.screens
 
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -79,24 +81,41 @@ fun ProfileScreen(
                         Text(text = "Agenda Synchronisatie", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
                     Text(
-                        "Voeg je rooster toe aan je persoonlijke agenda (Google Calendar, Outlook, etc.) via deze persoonlijke iCal-link.",
+                        "Eén keer instellen: je rooster verschijnt daarna automatisch in je agenda en blijft bijgewerkt.",
                         style = MaterialTheme.typography.bodyMedium
                     )
-                    
+
+                    // Subscribing (not importing) keeps the calendar in sync with the feed
+                    val webcalUrl = me.ical_url.replaceFirst(Regex("^https?://"), "webcal://")
+                    Button(
+                        onClick = {
+                            val googleUrl = "https://calendar.google.com/calendar/r?cid=" + Uri.encode(webcalUrl)
+                            context.startActivity(Intent(Intent.ACTION_VIEW, googleUrl.toUri()))
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.CalendarToday, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Toevoegen aan Google Agenda")
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Button(
+                        OutlinedButton(
                             onClick = {
-                                val intent = Intent(Intent.ACTION_VIEW, me.ical_url.toUri())
-                                context.startActivity(intent)
+                                try {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, webcalUrl.toUri()))
+                                } catch (e: ActivityNotFoundException) {
+                                    Toast.makeText(context, "Geen agenda-app gevonden. Gebruik Google Agenda of kopieer de link.", Toast.LENGTH_LONG).show()
+                                }
                             },
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Openen")
+                            Text("Andere app")
                         }
                         
                         OutlinedButton(

@@ -2,6 +2,14 @@ package com.roosterplanner.app.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import retrofit2.HttpException
+
+/** The "message" field of a WordPress REST error response, if any. */
+fun Throwable.apiMessage(): String? {
+    val body = (this as? HttpException)?.response()?.errorBody()?.string() ?: return null
+    return runCatching { JSONObject(body).optString("message").takeIf { it.isNotBlank() } }.getOrNull()
+}
 
 class RoosterPlannerRepository(private var api: ApiService) {
     
@@ -84,8 +92,14 @@ class RoosterPlannerRepository(private var api: ApiService) {
 
     suspend fun fetchColleagues(): Result<ColleaguesResponse> = runApi { api.swapsColleagues() }
 
-    suspend fun requestSwap(scheduleId: Long, requestedEmployeeId: Long? = null, reason: String? = null): Result<Unit> = runApi {
-        api.requestSwap(RequestSwapBody(scheduleId, requestedEmployeeId, reason))
+    suspend fun requestSwap(
+        scheduleId: Long,
+        requestedEmployeeId: Long? = null,
+        reason: String? = null,
+        partStart: String? = null,
+        partEnd: String? = null
+    ): Result<Unit> = runApi {
+        api.requestSwap(RequestSwapBody(scheduleId, requestedEmployeeId, reason, partStart, partEnd))
         Unit
     }
 
@@ -109,6 +123,20 @@ class RoosterPlannerRepository(private var api: ApiService) {
 
     suspend fun submitTimeoff(startDate: String, endDate: String, type: String, reason: String?): Result<Unit> = runApi {
         api.submitTimeoff(TimeoffRequest(startDate, endDate, type, reason))
+        Unit
+    }
+
+    // ---- Teamleider approvals ----
+
+    suspend fun fetchApprovals(): Result<ApprovalsResponse> = runApi { api.approvals() }
+
+    suspend fun decideSwap(swapId: Long, approve: Boolean, notes: String? = null): Result<Unit> = runApi {
+        api.decideSwap(swapId, DecisionBody(if (approve) "approve" else "reject", notes))
+        Unit
+    }
+
+    suspend fun decideTimeoff(timeoffId: Long, approve: Boolean, notes: String? = null): Result<Unit> = runApi {
+        api.decideTimeoff(timeoffId, DecisionBody(if (approve) "approve" else "reject", notes))
         Unit
     }
 

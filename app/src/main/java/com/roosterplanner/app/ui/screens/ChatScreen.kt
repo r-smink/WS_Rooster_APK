@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Announcement
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,7 +30,8 @@ fun ChatScreen(
     currentUserId: Long,
     onSendMessage: (String) -> Unit,
     onBack: () -> Unit,
-    error: String? = null
+    error: String? = null,
+    onRefresh: (() -> Unit)? = null
 ) {
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -47,6 +49,13 @@ fun ChatScreen(
             title = { Text("Groepschat") },
             navigationIcon = {
                 TextButton(onClick = onBack) { Text("Dashboard") }
+            },
+            actions = {
+                if (onRefresh != null) {
+                    IconButton(onClick = onRefresh) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Vernieuwen")
+                    }
+                }
             },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.surface,

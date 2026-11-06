@@ -9,5 +9,6 @@ enum class NavDest(val route: String, val label: String) {
     PROFILE("profile", "Mijn Profiel"),
     CHAT("chat", "Chat"),
     SICK("sick", "Ziek melden"),
-    NOTIFICATIONS("notifications", "Meldingen")
+    NOTIFICATIONS("notifications", "Meldingen"),
+    TEAMLEADER("teamleader", "Teamleider")
 }

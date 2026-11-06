@@ -121,6 +121,17 @@ interface ApiService {
 
     @POST("wp-json/roosterplanner/v1/timeoff")
     suspend fun submitTimeoff(@Body body: TimeoffRequest)
+
+    // ---- Teamleider approvals ----
+
+    @GET("wp-json/roosterplanner/v1/approvals")
+    suspend fun approvals(): ApprovalsResponse
+
+    @POST("wp-json/roosterplanner/v1/approvals/swaps/{id}")
+    suspend fun decideSwap(@Path("id") id: Long, @Body body: DecisionBody)
+
+    @POST("wp-json/roosterplanner/v1/approvals/timeoff/{id}")
+    suspend fun decideTimeoff(@Path("id") id: Long, @Body body: DecisionBody)
 }
 
 object ApiClient {

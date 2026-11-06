@@ -29,6 +29,7 @@ import com.roosterplanner.app.data.Location
 import com.roosterplanner.app.data.MeResponse
 import com.roosterplanner.app.data.MonthStatusResponse
 import com.roosterplanner.app.data.ScheduleItem
+import com.roosterplanner.app.ui.components.LocationLogo
 import java.time.*
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -114,6 +115,7 @@ fun ScheduleScreen(
                     currentMonth = currentMonth,
                     schedules = activeSchedules,
                     showEmployee = isFull,
+                    currentEmployeeId = me.employee.id,
                     onMonthChange = onMonthChange,
                     tf = tf
                 )
@@ -235,6 +237,7 @@ fun CalendarView(
     currentMonth: YearMonth,
     schedules: List<ScheduleItem>,
     showEmployee: Boolean,
+    currentEmployeeId: Long,
     onMonthChange: (YearMonth) -> Unit,
     tf: DateTimeFormatter
 ) {
@@ -244,14 +247,30 @@ fun CalendarView(
     if (selectedDateShifts.isNotEmpty()) {
         AlertDialog(
             onDismissRequest = { selectedDateShifts = emptyList() },
-            title = { Text(formatDutchDate(selectedDateStr)) },
+            title = {
+                Column {
+                    Text(formatDutchDate(selectedDateStr))
+                    if (showEmployee) {
+                        val people = selectedDateShifts.mapNotNull { it.employee_id }.distinct().size
+                        Text(
+                            "$people ${if (people == 1) "medewerker" else "medewerkers"} aan het werk",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            },
             text = {
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 480.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(selectedDateShifts) { shift ->
-                        ScheduleCard(shift, tf, showEmployee = showEmployee)
+                if (showEmployee) {
+                    DayOverview(selectedDateShifts, currentEmployeeId)
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 480.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(selectedDateShifts) { shift ->
+                            ScheduleCard(shift, tf, showEmployee = false)
+                        }
                     }
                 }
             },
@@ -358,6 +377,84 @@ fun CalendarView(
     }
 }
 
+/**
+ * Compact "who works today" view: one block per shift, one line per employee.
+ */
+@Composable
+private fun DayOverview(daySchedules: List<ScheduleItem>, currentEmployeeId: Long) {
+    val groups = daySchedules
+        .sortedWith(compareBy<ScheduleItem>({ it.shift_start_time ?: it.start_time ?: "99" }, { it.shift_name ?: "" }, { it.employee_name ?: "" }))
+        .groupBy { Triple(it.location_name, it.shift_name, it.shift_id) }
+
+    LazyColumn(
+        modifier = Modifier.heightIn(max = 520.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        groups.forEach { (key, items) ->
+            item(key = key.toString()) {
+                val first = items.first()
+                val shiftRange = listOfNotNull(hhmm(first.shift_start_time ?: first.start_time), hhmm(first.shift_end_time ?: first.end_time))
+                    .joinToString("–")
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(parseShiftColor(first.color) ?: MaterialTheme.colorScheme.primary)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            LocationLogo(first.location_name, size = 18.dp)
+                            if (first.location_name != null) Spacer(Modifier.width(6.dp))
+                            Text(
+                                first.shift_name ?: "Dienst",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                shiftRange.ifBlank { "Flexibel" },
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        items.forEach { item ->
+                            val isMe = item.employee_id == currentEmployeeId
+                            val ownRange = listOfNotNull(hhmm(item.start_time), hhmm(item.end_time)).joinToString("–")
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    (item.employee_name ?: "Onbekend") + if (isMe) " (jij)" else "",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (isMe) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                // Only show times when they differ from the shift's default
+                                if (ownRange.isNotBlank() && ownRange != shiftRange) {
+                                    Text(ownRange, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun parseShiftColor(hex: String?): Color? = runCatching {
+    Color(android.graphics.Color.parseColor(hex!!.trim()))
+}.getOrNull()
+
 @Composable
 fun ScheduleCard(item: ScheduleItem, tf: DateTimeFormatter, showEmployee: Boolean = false) {
     val formattedStart = item.start_time?.let {
@@ -383,11 +480,15 @@ fun ScheduleCard(item: ScheduleItem, tf: DateTimeFormatter, showEmployee: Boolea
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = item.shift_name ?: "Dienst",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LocationLogo(item.location_name, size = 22.dp)
+                if (item.location_name != null) Spacer(Modifier.width(6.dp))
+                Text(
+                    text = item.shift_name ?: "Dienst",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
             if (showEmployee && !item.employee_name.isNullOrBlank()) {
                 Text(
                     text = item.employee_name!!,

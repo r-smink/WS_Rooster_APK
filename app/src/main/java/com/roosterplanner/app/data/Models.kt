@@ -212,7 +212,11 @@ data class SwapRequestItem(
     val location_id: Long?,
     val location_name: String?,
     val requester_name: String? = null,
-    val requested_name: String? = null
+    val requested_name: String? = null,
+    val part_start: String? = null,
+    val part_end: String? = null,
+    val is_open: Int? = null,
+    val admin_notes: String? = null
 )
 
 data class SwapsRequestsResponse(
@@ -230,7 +234,9 @@ data class ColleaguesResponse(val colleagues: List<Colleague> = emptyList())
 data class RequestSwapBody(
     val schedule_id: Long,
     val requested_employee_id: Long? = null,
-    val reason: String? = null
+    val reason: String? = null,
+    val part_start: String? = null,
+    val part_end: String? = null
 )
 
 data class RespondSwapBody(val action: String)
@@ -265,3 +271,42 @@ data class TimeoffRequest(
     val type: String = "vacation",
     val reason: String? = null
 )
+
+// ---- Teamleider approvals ----
+
+data class ApprovalSwap(
+    val id: Long,
+    val schedule_id: Long,
+    val status: String,
+    val reason: String?,
+    val requested_at: String?,
+    val part_start: String? = null,
+    val part_end: String? = null,
+    val work_date: String?,
+    val start_time: String?,
+    val end_time: String?,
+    val shift_name: String?,
+    val location_id: Long?,
+    val location_name: String?,
+    val requester_name: String?,
+    val taker_name: String? = null
+)
+
+data class ApprovalTimeoff(
+    val id: Long,
+    val start_date: String,
+    val end_date: String,
+    val type: String,
+    val status: String,
+    val reason: String?,
+    val requested_at: String?,
+    val days_requested: Int?,
+    val employee_name: String?
+)
+
+data class ApprovalsResponse(
+    val swaps: List<ApprovalSwap> = emptyList(),
+    val timeoff: List<ApprovalTimeoff> = emptyList()
+)
+
+data class DecisionBody(val action: String, val notes: String? = null)
