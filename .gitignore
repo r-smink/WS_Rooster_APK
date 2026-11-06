@@ -46,3 +46,6 @@ captures/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Release builds (aab + mapping)
+/app/release/
