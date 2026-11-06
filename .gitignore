@@ -49,3 +49,7 @@ Thumbs.db
 
 # Release builds (aab + mapping)
 /app/release/
+
+# Signing keys and local config
+*.jks
+local.properties

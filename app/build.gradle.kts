@@ -1,3 +1,10 @@
+import java.util.Properties
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
 plugins {
     id("com.android.application")
     id("com.google.gms.google-services")
@@ -21,9 +28,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("rooster-release-key.jks")
-            storePassword = "REMOVED"
+            storePassword = localProperties.getProperty("release.storePassword")
             keyAlias = "rooster-alias"
-            keyPassword = "REMOVED"
+            keyPassword = localProperties.getProperty("release.keyPassword")
         }
     }
 
